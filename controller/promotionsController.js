@@ -1,11 +1,11 @@
 const { pool } = require("../db/conntctDB");
 
-const HandleAddTopTeacher = async (req, res) => {
+const handleAddTopTeacher = async (req, res) => {
   try {
     const { name, about, streamid } = req.body;
 
 
-    // ✅ Check if image uploaded
+    
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -13,10 +13,7 @@ const HandleAddTopTeacher = async (req, res) => {
       });
     }
 
-    // 🔥 If using multer local storage
-    // const avatar = req.file.filename;
-
-    // 🔥 If using multer-s3
+   
     const avatar = req.file.location;
 
 
@@ -43,7 +40,7 @@ const HandleAddTopTeacher = async (req, res) => {
   }
 };
 
-const HandleGetTopTeacher = async (req, res) => {
+const handleGetTopTeacher = async (req, res) => {
   try {
     const tecacher = await pool.query(
       "SELECT * FROM top_teachers"
@@ -56,7 +53,7 @@ const HandleGetTopTeacher = async (req, res) => {
   }
 }
 
-const HandleUpdateTopTeacher = async (req, res) => {
+const handleUpdateTopTeacher = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, about, streamid } = req.body;
@@ -107,7 +104,7 @@ const HandleUpdateTopTeacher = async (req, res) => {
   }
 };
 
-const HandleDeleteTopTeacher = async (req, res) => {
+const handleDeleteTopTeacher = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -142,7 +139,7 @@ const HandleDeleteTopTeacher = async (req, res) => {
   }
 };
 
-const HandleAddTopStudent = async (req, res) => {
+const handleAddTopStudent = async (req, res) => {
   try {
 
 
@@ -179,7 +176,7 @@ const HandleAddTopStudent = async (req, res) => {
       });
     }
 
-    // Correct SQL query
+  
     const result = await pool.query(
       `INSERT INTO top_students (name, stream_id, avatar, video)
        VALUES ($1, $2, $3, $4)
@@ -203,7 +200,7 @@ const HandleAddTopStudent = async (req, res) => {
 };
 
 
-const HandleGetTopStudent = async (req, res) => {
+const handleGetTopStudent = async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT * FROM top_students",
@@ -218,7 +215,7 @@ const HandleGetTopStudent = async (req, res) => {
   }
 }
 
-const HandleUpdateTopStudent = async (req, res) => {
+const handleUpdateTopStudent = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, streamid } = req.body;
@@ -261,7 +258,7 @@ const HandleUpdateTopStudent = async (req, res) => {
   }
 };
 
-const HandleDeleteStudent = async (req, res) => {
+const handleDeleteStudent = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -296,4 +293,4 @@ const HandleDeleteStudent = async (req, res) => {
   }
 };
 
-module.exports = { HandleAddTopTeacher, HandleGetTopTeacher, HandleUpdateTopTeacher, HandleDeleteTopTeacher, HandleAddTopStudent, HandleGetTopStudent, HandleUpdateTopStudent , HandleDeleteStudent };
+module.exports = { handleAddTopTeacher, handleGetTopTeacher, handleUpdateTopTeacher, handleDeleteTopTeacher, handleAddTopStudent, handleGetTopStudent, handleUpdateTopStudent , handleDeleteStudent };

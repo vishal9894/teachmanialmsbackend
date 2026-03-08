@@ -1,9 +1,9 @@
 const { pool } = require("../db/conntctDB");
 
-const HandleCreateStream = async (req, res) => {
+const handleCreateStream = async (req, res) => {
     try {
         const { name, description } = req.body;
-        const image = req.file ? req.file.location : null; // if using S3 or multer-storage
+        const image = req.file ? req.file.location : null; 
 
         const result = await pool.query(
             `INSERT INTO streams (name, description, image)
@@ -28,7 +28,7 @@ const HandleCreateStream = async (req, res) => {
     }
 };
 
-const HandleGetStream = async (req, res) => {
+const handleGetStream = async (req, res) => {
     try {
         const result = await pool.query(
             "SELECT * FROM streams"
@@ -45,7 +45,7 @@ const HandleGetStream = async (req, res) => {
     }
 }
 
-const HandleUpdateStream = async (req, res) => {
+const handleUpdateStream = async (req, res) => {
     try {
         const { id } = req.params;
         const { name, description } = req.body;
@@ -84,7 +84,7 @@ const HandleUpdateStream = async (req, res) => {
         });
     }
 };
-const HandleDeleteStream = async (req, res) => {
+const handleDeleteStream = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -118,4 +118,4 @@ const HandleDeleteStream = async (req, res) => {
   }
 };
 
-module.exports = { HandleCreateStream, HandleGetStream , HandleUpdateStream , HandleDeleteStream };
+module.exports = { handleCreateStream, handleGetStream , handleUpdateStream , handleDeleteStream };

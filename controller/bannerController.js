@@ -2,7 +2,7 @@ const { pool } = require("../db/conntctDB");
 
 
 
-const HandleCreateBanner = async (req, res) => {
+const handleCreateBanner = async (req, res) => {
     try {
 
         const {
@@ -11,7 +11,7 @@ const HandleCreateBanner = async (req, res) => {
             redirecttype,
             url_link,
             publish = false,
-            type   // banner OR news
+            type  
         } = req.body;
 
         const image = req.file?.location;
@@ -38,7 +38,7 @@ const HandleCreateBanner = async (req, res) => {
     }
 };
 
-const HandleGetBanner = async (req, res) => {
+const handleGetBanner = async (req, res) => {
     try {
 
         const result = await pool.query(
@@ -55,7 +55,7 @@ const HandleGetBanner = async (req, res) => {
     }
 };
 
-const HandleGetNews = async (req, res) => {
+const handleGetNews = async (req, res) => {
     try {
 
         const result = await pool.query(
@@ -73,7 +73,7 @@ const HandleGetNews = async (req, res) => {
 };
 
 
-const HandleBannerPublish = async (req, res) => {
+const handleBannerPublish = async (req, res) => {
     try {
         const { id } = req.params;
         const { publish } = req.body;
@@ -118,7 +118,7 @@ const HandleBannerPublish = async (req, res) => {
     }
 };
 
-const HandleUpdateBanner = async (req, res) => {
+const handleUpdateBanner = async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -138,7 +138,7 @@ const HandleUpdateBanner = async (req, res) => {
             publish,
         } = req.body;
 
-        // check banner
+
         const checkBanner = await pool.query(
             "SELECT * FROM banners WHERE id = $1",
             [id]
@@ -153,21 +153,21 @@ const HandleUpdateBanner = async (req, res) => {
 
         const existingBanner = checkBanner.rows[0];
 
-        // image update
+  
         let image = existingBanner.image;
 
         if (req.file && req.file.location) {
             image = req.file.location;
         }
 
-        // convert publish
+
         let publishValue = existingBanner.publish;
 
         if (publish !== undefined) {
             publishValue = publish === "true" || publish === true;
         }
 
-        // update query
+
         const result = await pool.query(
             `UPDATE banners
        SET title = $1,
@@ -207,7 +207,7 @@ const HandleUpdateBanner = async (req, res) => {
         });
     }
 };
-const HandleDeleteBanner = async (req, res) => {
+const handleDeleteBanner = async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -223,7 +223,7 @@ const HandleDeleteBanner = async (req, res) => {
             });
         }
 
-        // 2️⃣ Delete banner
+  
         const result = await pool.query(
             "DELETE FROM banners WHERE id = $1 RETURNING *",
             [id]
@@ -244,4 +244,4 @@ const HandleDeleteBanner = async (req, res) => {
     }
 };
 
-module.exports = { HandleCreateBanner, HandleGetBanner, HandleBannerPublish, HandleUpdateBanner, HandleDeleteBanner, HandleGetNews };
+module.exports = { handleCreateBanner, handleGetBanner, handleBannerPublish, handleUpdateBanner, handleDeleteBanner, handleGetNews };

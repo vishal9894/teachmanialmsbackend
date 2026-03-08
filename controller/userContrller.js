@@ -5,7 +5,7 @@ const { GenerateAccessToken } = require("../services/auth");
 
 
 
-const HandleSignup = async (req, res) => {
+const handleSignup = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
@@ -69,7 +69,7 @@ const HandleSignup = async (req, res) => {
 
 
 
-const HandleLogin = async (req, res) => {
+const handleLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -126,7 +126,7 @@ const HandleLogin = async (req, res) => {
 
 
 
-const HandleRefresh = async (req, res) => {
+const handleRefresh = async (req, res) => {
   try {
     const { refreshToken } = req.body;
 
@@ -198,7 +198,7 @@ const HandleRefresh = async (req, res) => {
 
 
 
-const HandleLogout = async (req, res) => {
+const handleLogout = async (req, res) => {
   try {
     const { refreshToken } = req.body;
 
@@ -223,7 +223,7 @@ const HandleLogout = async (req, res) => {
 };
 
 
-const HandleGetProfile = async (req, res) => {
+const handleGetProfile = async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT * FROM users WHERE id = $1",
@@ -246,7 +246,7 @@ const HandleGetProfile = async (req, res) => {
 };
 
 
-const HandleGetAllProfile = async (req, res) => {
+const handleGetAllProfile = async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM users");
 
@@ -267,10 +267,10 @@ const HandleGetAllProfile = async (req, res) => {
 
 
 module.exports = {
-  HandleSignup,
-  HandleLogin,
-  HandleRefresh,
-  HandleLogout,
-  HandleGetProfile,
-  HandleGetAllProfile,
+  handleSignup,
+  handleLogin,
+  handleRefresh,
+  handleLogout,
+  handleGetProfile,
+  handleGetAllProfile,
 };

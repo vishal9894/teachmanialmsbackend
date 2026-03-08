@@ -1,5 +1,5 @@
 const { pool } = require("../db/conntctDB");
-const HandleCreateTeacher = async (req, res) => {
+const handleCreateTeacher = async (req, res) => {
     try {
 
         const {
@@ -48,7 +48,7 @@ const HandleCreateTeacher = async (req, res) => {
 
     }
 };
-const HandleGetTeacher = async (req, res) => {
+const handleGetTeacher = async (req, res) => {
     try {
         const result = await pool.query(
             "SELECT * FROM teachers"
@@ -64,7 +64,7 @@ const HandleGetTeacher = async (req, res) => {
     }
 }
 
-const HandleGetTeacherById = async (req, res) => {
+const handleGetTeacherById = async (req, res) => {
     try {
 
         const { id } = req.params;
@@ -98,4 +98,4 @@ const HandleGetTeacherById = async (req, res) => {
     }
 };
 
-module.exports = { HandleCreateTeacher, HandleGetTeacher, HandleGetTeacherById };
+module.exports = { handleCreateTeacher, handleGetTeacher, handleGetTeacherById };

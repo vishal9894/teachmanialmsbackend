@@ -1,7 +1,7 @@
 const { pool } = require("../db/conntctDB");
 
 
-const HandleCreateCourse = async (req, res) => {
+const handleCreateCourse = async (req, res) => {
   try {
 
     const {
@@ -82,7 +82,7 @@ RETURNING *`,
 };
 
 
-const HandleGetCourse = async (req, res) => {
+const handleGetCourse = async (req, res) => {
   try {
 
     const { type } = req.params;
@@ -129,7 +129,7 @@ const HandleGetCourse = async (req, res) => {
 
 
 
-const HandleUpdatePublish = async (req, res) => {
+const handleUpdatePublish = async (req, res) => {
   try {
 
     const { id } = req.params;
@@ -175,7 +175,7 @@ const HandleUpdatePublish = async (req, res) => {
   }
 };
 
-const HandleUpdateCourse = async (req, res) => {
+const handleUpdateCourse = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -199,7 +199,7 @@ const HandleUpdateCourse = async (req, res) => {
       publish
     } = req.body;
 
-    // Convert JSON fields
+   
     let featuresJSON = coursefeatures
       ? JSON.stringify(JSON.parse(coursefeatures))
       : null;
@@ -208,7 +208,7 @@ const HandleUpdateCourse = async (req, res) => {
       ? JSON.stringify(JSON.parse(syllabus))
       : null;
 
-    // Files
+    
     const timetable = req.files?.timetable?.[0]?.location || null;
     const batchinfo = req.files?.batchinfo?.[0]?.location || null;
     const courseimage = req.files?.courseimage?.[0]?.location || null;
@@ -287,7 +287,7 @@ const HandleUpdateCourse = async (req, res) => {
 };
 
 
-const HandleDeleteCourse = async (req, res) => {
+const handleDeleteCourse = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -320,9 +320,9 @@ const HandleDeleteCourse = async (req, res) => {
 
 
 module.exports = {
-  HandleCreateCourse,
-  HandleGetCourse,
-  HandleUpdatePublish,
-  HandleUpdateCourse,
-  HandleDeleteCourse
+  handleCreateCourse,
+  handleGetCourse,
+  handleUpdatePublish,
+  handleUpdateCourse,
+  handleDeleteCourse
 };
