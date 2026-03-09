@@ -1,5 +1,5 @@
 const express = require("express");
-const { handleCreateCourse, handleGetCourse, handleUpdatePublish, handleUpdateCourse, handleDeleteCourse } = require("../controller/courseController");
+const { handleCreateCourse, handleGetCourse, handleUpdatePublish, handleUpdateCourse, handleDeleteCourse, handleCreateFolder, handleUploadFile, handleGetFolderContent, handleDeleteContent } = require("../controller/courseController");
 const upload = require("../middleware/multer");
 
 const route = express.Router();
@@ -14,5 +14,9 @@ route.get("/get-course/:type", handleGetCourse);
 route.put("/publish/:id", handleUpdatePublish)
 route.put("/update-course/:id" , handleUpdateCourse)
 route.delete("/delete-course/:id" , handleDeleteCourse);
+route.post("/create-folder" , handleCreateFolder);
+route.post("/upload-file" , handleUploadFile);
+route.get("/get-folder/:courseId" , handleGetFolderContent);
+route.delete("/delete-folder/:id" , handleDeleteContent);
 
 module.exports = route;

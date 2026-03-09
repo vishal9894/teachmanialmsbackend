@@ -8,6 +8,7 @@ const courseRoute = require("./routes/courseRoute");
 const strimeRoute = require("./routes/streamRoute");
 const teacherRoute = require("./routes/teacherRoute");
 const quizRoute = require("./routes/quizRoute");
+const socialmediaRoute = require("./routes/socialMediaRoute");
 const cors = require("cors");
 
 
@@ -33,6 +34,7 @@ app.use("/api/course", courseRoute);
 app.use("/api/strime", strimeRoute);
 app.use("/api/teacher", teacherRoute)
 app.use("/api/quiz", quizRoute)
+app.use("/api/social", socialmediaRoute)
 
 
 app.listen(port, () => {

@@ -11,7 +11,7 @@ const handleCreateBanner = async (req, res) => {
             redirecttype,
             url_link,
             publish = false,
-            type  
+            type
         } = req.body;
 
         const image = req.file?.location;
@@ -153,7 +153,7 @@ const handleUpdateBanner = async (req, res) => {
 
         const existingBanner = checkBanner.rows[0];
 
-  
+
         let image = existingBanner.image;
 
         if (req.file && req.file.location) {
@@ -223,7 +223,7 @@ const handleDeleteBanner = async (req, res) => {
             });
         }
 
-  
+
         const result = await pool.query(
             "DELETE FROM banners WHERE id = $1 RETURNING *",
             [id]

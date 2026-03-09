@@ -199,7 +199,7 @@ const handleUpdateCourse = async (req, res) => {
       publish
     } = req.body;
 
-   
+
     let featuresJSON = coursefeatures
       ? JSON.stringify(JSON.parse(coursefeatures))
       : null;
@@ -208,7 +208,7 @@ const handleUpdateCourse = async (req, res) => {
       ? JSON.stringify(JSON.parse(syllabus))
       : null;
 
-    
+
     const timetable = req.files?.timetable?.[0]?.location || null;
     const batchinfo = req.files?.batchinfo?.[0]?.location || null;
     const courseimage = req.files?.courseimage?.[0]?.location || null;
@@ -318,11 +318,132 @@ const handleDeleteCourse = async (req, res) => {
   }
 };
 
+const handleCreateFolder = async (req, res) => {
+  try {
+
+    const { courseId, name, parentId } = req.body;
+
+    const result = await pool.query(
+      `INSERT INTO course_contents
+      (course_id,name,type,parent_id)
+      VALUES($1,$2,'folder',$3)
+      RETURNING *`,
+      [courseId, name, parentId || null]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Folder created",
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false });
+  }
+};
+
+const handleUploadFile = async (req, res) => {
+  try {
+
+    const { courseId, parentId } = req.body;
+
+    const file = req.file;
+
+    const result = await pool.query(
+      `INSERT INTO course_contents
+      (course_id,name,type,parent_id,file_url,file_type)
+      VALUES($1,$2,'file',$3,$4,$5)
+      RETURNING *`,
+      [
+        courseId,
+        file.originalname,
+        parentId,
+        file.location,
+        file.mimetype
+      ]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "File uploaded",
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false });
+  }
+};
+
+const handleGetFolderContent = async (req, res) => {
+
+  try {
+
+    const { courseId, parentId } = req.query;
+
+    const result = await pool.query(
+      `SELECT *
+       FROM course_contents
+       WHERE course_id = $1
+       AND parent_id IS NOT DISTINCT FROM $2
+       ORDER BY type DESC, name ASC`,
+      [courseId, parentId || null]
+    );
+
+    res.status(200).json({
+      success: true,
+      data: result.rows
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      success: false
+    });
+
+  }
+
+};
+
+const handleDeleteContent = async (req, res) => {
+
+  try {
+
+    const { id } = req.params;
+
+    await pool.query(
+      `DELETE FROM course_contents WHERE id = $1`,
+      [id]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Deleted successfully"
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      success: false
+    });
+
+  }
+
+};
 
 module.exports = {
   handleCreateCourse,
   handleGetCourse,
   handleUpdatePublish,
   handleUpdateCourse,
-  handleDeleteCourse
+  handleDeleteCourse,
+  handleCreateFolder,
+  handleGetFolderContent,
+  handleUploadFile,
+  handleDeleteContent
 };
