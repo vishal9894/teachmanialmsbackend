@@ -4,7 +4,6 @@ const crypto = require("crypto");
 const { GenerateAccessToken } = require("../services/auth");
 
 
-
 const handleSignup = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -21,12 +20,13 @@ const handleSignup = async (req, res) => {
     const hashpassword = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
-      "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING *",
+      `INSERT INTO users (name, email, password, login_count)
+       VALUES ($1, $2, $3, 1)
+       RETURNING *`,
       [name, email, hashpassword]
     );
 
     const user = result.rows[0];
-
 
     const sessionId = crypto.randomBytes(32).toString("hex");
 
@@ -35,10 +35,8 @@ const handleSignup = async (req, res) => {
       [sessionId, user.id]
     );
 
-    
     const accessToken = GenerateAccessToken(user, sessionId);
 
-    
     const refreshToken = crypto.randomBytes(64).toString("hex");
 
     const hash = crypto
@@ -68,7 +66,6 @@ const handleSignup = async (req, res) => {
 };
 
 
-
 const handleLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -84,17 +81,24 @@ const handleLogin = async (req, res) => {
     const user = result.rows[0];
 
     const isMatch = await bcrypt.compare(password, user.password);
+
     if (!isMatch)
       return res.status(400).json({ message: "Invalid credentials" });
 
     const sessionId = crypto.randomBytes(32).toString("hex");
 
-    await pool.query(
-      "UPDATE users SET session_id = $1 WHERE id = $2",
+    const updatedUserResult = await pool.query(
+      `UPDATE users
+       SET session_id = $1,
+           login_count = login_count + 1
+       WHERE id = $2
+       RETURNING *`,
       [sessionId, user.id]
     );
 
-    const accessToken = GenerateAccessToken(user, sessionId);
+    const updatedUser = updatedUserResult.rows[0];
+
+    const accessToken = GenerateAccessToken(updatedUser, sessionId);
 
     const refreshToken = crypto.randomBytes(64).toString("hex");
 
@@ -106,10 +110,10 @@ const handleLogin = async (req, res) => {
     await pool.query(
       `INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
        VALUES ($1, $2, NOW() + INTERVAL '7 days')`,
-      [user.id, hash]
+      [updatedUser.id, hash]
     );
 
-    const { password: _, ...safeUser } = user;
+    const { password: _, ...safeUser } = updatedUser;
 
     res.status(200).json({
       message: "Login successful",
@@ -123,7 +127,6 @@ const handleLogin = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
 
 
 const handleRefresh = async (req, res) => {
@@ -197,7 +200,6 @@ const handleRefresh = async (req, res) => {
 };
 
 
-
 const handleLogout = async (req, res) => {
   try {
     const { refreshToken } = req.body;
@@ -257,11 +259,68 @@ const handleGetAllProfile = async (req, res) => {
     res.json({
       message: "All users fetched successfully",
       length,
-      users,
+      data: users,
     });
 
   } catch (error) {
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+const handleUpdateUsers = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, phone_number, city, state } = req.body;
+
+    const image = req.file ? req.file.filename : null;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "User id is required",
+      });
+    }
+
+    const userExist = await pool.query(
+      `SELECT id FROM users WHERE id = $1`,
+      [id]
+    );
+
+    if (userExist.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const updatedUser = await pool.query(
+      `UPDATE users
+       SET
+         name = COALESCE($1, name),
+         email = COALESCE($2, email),
+         phone_number = COALESCE($3, phone_number),
+         city = COALESCE($4, city),
+         state = COALESCE($5, state),
+         image = COALESCE($6, image),
+         updated_at = NOW()
+       WHERE id = $7
+       RETURNING *`,
+      [name, email, phone_number, city, state, image, id]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "User updated successfully",
+      data: updatedUser.rows[0],
+    });
+
+  } catch (error) {
+    console.error("Update User Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 };
 
@@ -273,4 +332,5 @@ module.exports = {
   handleLogout,
   handleGetProfile,
   handleGetAllProfile,
+  handleUpdateUsers,
 };

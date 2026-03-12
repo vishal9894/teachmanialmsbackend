@@ -211,7 +211,7 @@ const handleUpdateQuiz = async (req, res) => {
       questions
     } = req.body;
 
-    // check quiz exist
+   
     const quiz = await pool.query(
       `SELECT * FROM quizzes WHERE id = $1`,
       [id]
@@ -224,7 +224,7 @@ const handleUpdateQuiz = async (req, res) => {
       });
     }
 
-    // update quiz
+   
     const result = await pool.query(
       `UPDATE quizzes
        SET name = $1,
@@ -251,13 +251,12 @@ const handleUpdateQuiz = async (req, res) => {
       ]
     );
 
-    // delete old config
+
     await pool.query(
       `DELETE FROM quiz_question_config WHERE quiz_id = $1`,
       [id]
     );
 
-    // insert new config
     if (questions && questions.length > 0) {
       for (const q of questions) {
         await pool.query(
