@@ -11,6 +11,7 @@ const quizRoute = require("./routes/quizRoute");
 const socialmediaRoute = require("./routes/socialMediaRoute");
 const eventRoute = require("./routes/eventRoute");
 const settingRoute = require("./routes/settingRoute")
+const bulkQuestionRoute = require("./routes/bulkQuestionRoute")
 const cors = require("cors");
 
 
@@ -38,7 +39,8 @@ app.use("/api/teacher", teacherRoute)
 app.use("/api/quiz", quizRoute)
 app.use("/api/social", socialmediaRoute)
 app.use("/api/event", eventRoute);
-app.use("/api/setting" , settingRoute)
+app.use("/api/setting" , settingRoute);
+app.use("/api/bulkquestion" , bulkQuestionRoute)
 
 
 app.listen(port, () => {
