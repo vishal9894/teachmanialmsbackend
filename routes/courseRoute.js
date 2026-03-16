@@ -14,7 +14,7 @@ route.get("/get-course/:type", handleGetCourse);
 route.put("/publish/:id", handleUpdatePublish)
 route.put("/update-course/:id" , handleUpdateCourse)
 route.delete("/delete-course/:id" , handleDeleteCourse);
-route.post("/create-folder" , handleCreateFolder);
+route.post("/create-folder" , upload.single("image") , handleCreateFolder);
 route.post("/upload-content", upload.single("file"), handleUploadFile);
 route.get("/get-folder" , handleGetFolderContent);
 route.delete("/delete-folder/:id" , handleDeleteContent);

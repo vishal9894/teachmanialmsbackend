@@ -131,9 +131,17 @@ const handleGetCourse = async (req, res) => {
 const handleUpdatePublish = async (req, res) => {
   try {
     const { id } = req.params;
+    const { publish } = req.body;
+
+    if (publish === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "Publish value is required"
+      });
+    }
 
     const course = await pool.query(
-      `SELECT publish FROM courses WHERE id = $1`,
+      `SELECT id FROM courses WHERE id=$1`,
       [id]
     );
 
@@ -144,24 +152,26 @@ const handleUpdatePublish = async (req, res) => {
       });
     }
 
-    const newStatus = !course.rows[0].publish;
-
     const result = await pool.query(
       `UPDATE courses
        SET publish=$1, updated_at=NOW()
        WHERE id=$2
        RETURNING *`,
-      [newStatus, id]
+      [publish, id]
     );
 
     res.status(200).json({
       success: true,
-      message: "Publish status updated",
+      message: "Publish status updated successfully",
       data: result.rows[0]
     });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("Publish Update Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
   }
 };
 
@@ -294,12 +304,14 @@ const handleCreateFolder = async (req, res) => {
   try {
     const { courseId, name, parentId } = req.body;
 
+     const image = req.file?.location; 
+
     const result = await pool.query(
       `INSERT INTO course_contents
-       (course_id,name,type,parent_id)
-       VALUES($1,$2,'folder',$3)
+       (course_id,name,type,parent_id , image)
+       VALUES($1,$2,'folder',$3 , $4)
        RETURNING *`,
-      [courseId, name, normalizeParentId(parentId)]
+      [courseId, name, normalizeParentId(parentId) , image]
     );
 
     res.status(201).json({
@@ -316,25 +328,53 @@ const handleCreateFolder = async (req, res) => {
 
 const handleUploadFile = async (req, res) => {
   try {
-    const { courseId, parentId, contentType, quizId, name, videoLink } = req.body;
+    const {
+      courseId,
+      parentId,
+      contentType,
+      quizId,
+      title,
+      metadata
+    } = req.body;
+
     const file = req.file;
 
+    /* ------------ VALIDATION ------------ */
+
     if (!courseId) {
-      return res.status(400).json({ success: false, message: "Course required" });
+      return res.status(400).json({
+        success: false,
+        message: "Course required",
+      });
     }
 
+    /* ------------ PARSE METADATA ------------ */
+    let meta = {};
+    if (metadata) {
+      try {
+        meta = JSON.parse(metadata);
+      } catch (err) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid metadata JSON",
+        });
+      }
+    }
 
-
+    /* ------------ COURSE CHECK ------------ */
     const courseCheck = await pool.query(
       "SELECT id FROM courses WHERE id=$1",
       [courseId]
     );
 
     if (!courseCheck.rows.length) {
-      return res.status(400).json({ success: false, message: "Course not found" });
+      return res.status(400).json({
+        success: false,
+        message: "Course not found",
+      });
     }
 
-
+    /* ------------ PARENT CHECK ------------ */
     if (parentId) {
       const parentCheck = await pool.query(
         "SELECT id,type FROM course_contents WHERE id=$1",
@@ -342,39 +382,49 @@ const handleUploadFile = async (req, res) => {
       );
 
       if (!parentCheck.rows.length) {
-        return res.status(400).json({ success: false, message: "Parent not found" });
+        return res.status(400).json({
+          success: false,
+          message: "Parent not found",
+        });
       }
 
-      const parentType = parentCheck.rows[0].type;
-
-      if (!["folder", "video"].includes(parentType)) {
-        return res.status(400).json({ success: false, message: "Content allowed only inside folder or video" });
+      if (!["folder", "video"].includes(parentCheck.rows[0].type)) {
+        return res.status(400).json({
+          success: false,
+          message: "Content allowed only inside folder or video",
+        });
       }
     }
 
+    /* ------------ CONTENT VARIABLES ------------ */
 
     let type = null;
     let fileUrl = null;
     let fileType = null;
     let referenceId = null;
-    let contentName = name || null;
+    let contentName = title || "Untitled";
 
-
+    /* ================= VIDEO ================= */
     if (contentType === "video") {
-      if (!videoLink) {
-        return res.status(400).json({ success: false, message: "Video link required" });
+      if (!meta.link) {
+        return res.status(400).json({
+          success: false,
+          message: "Video link required",
+        });
       }
 
       type = "video";
-      contentName = contentName || "Video";
-      fileUrl = videoLink; 
+      fileUrl = meta.link;
       fileType = "video/link";
     }
 
-
+    /* ================= TEST ================= */
     else if (contentType === "test") {
       if (!quizId) {
-        return res.status(400).json({ success: false, message: "Quiz ID required" });
+        return res.status(400).json({
+          success: false,
+          message: "Quiz ID required",
+        });
       }
 
       const quizCheck = await pool.query(
@@ -383,40 +433,50 @@ const handleUploadFile = async (req, res) => {
       );
 
       if (!quizCheck.rows.length) {
-        return res.status(400).json({ success: false, message: "Invalid quiz ID" });
+        return res.status(400).json({
+          success: false,
+          message: "Invalid quiz ID",
+        });
       }
 
       type = "test";
-      contentName = contentName || "Quiz Test";
       referenceId = quizId;
     }
 
-
+    /* ================= PDF ================= */
     else if (contentType === "pdf") {
       if (!file) {
-        return res.status(400).json({ success: false, message: "PDF file required" });
+        return res.status(400).json({
+          success: false,
+          message: "PDF file required",
+        });
       }
 
       if (file.mimetype !== "application/pdf") {
-        return res.status(400).json({ success: false, message: "Only PDF files are allowed" });
+        return res.status(400).json({
+          success: false,
+          message: "Only PDF allowed",
+        });
       }
 
       type = "pdf";
-      contentName = contentName || file.originalname;
-      fileUrl = file.location;
+      fileUrl = file.location || file.path;
       fileType = file.mimetype;
     }
 
-
     else {
-      return res.status(400).json({ success: false, message: "Invalid content type" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid content type",
+      });
     }
 
+    /* ------------ INSERT ------------ */
 
     const result = await pool.query(
       `INSERT INTO course_contents
-       (course_id,name,type,parent_id,file_url,file_type,reference_id)
-       VALUES($1,$2,$3,$4,$5,$6,$7)
+       (course_id,name,type,parent_id,file_url,file_type,reference_id,metadata)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8)
        RETURNING *`,
       [
         courseId,
@@ -425,19 +485,24 @@ const handleUploadFile = async (req, res) => {
         parentId || null,
         fileUrl,
         fileType,
-        referenceId
+        referenceId,
+        meta
       ]
     );
 
     res.status(201).json({
       success: true,
       message: "Content added successfully",
-      data: result.rows[0]
+      data: result.rows[0],
     });
 
   } catch (error) {
     console.error("Upload Error:", error);
-    res.status(500).json({ success: false, message: error.message });
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 const handleGetFolderContent = async (req, res) => {

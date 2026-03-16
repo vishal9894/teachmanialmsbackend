@@ -1,42 +1,53 @@
 const { pool } = require("../db/conntctDB");
 
 const handleCreateSocialmedia = async (req, res) => {
-    try {
+  try {
+    const { name, url } = req.body;
 
-        const { name, url } = req.body;
-
-        if (!name || !url) {
-            return res.status(400).json({
-                success: false,
-                message: "Name and URL are required"
-            });
-        }
-
-        const image = req.files?.image?.[0]?.location || null;
-
-        const result = await pool.query(
-            `INSERT INTO social_media (name, url, image)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-            [name, url, image]
-        );
-
-        res.status(201).json({
-            success: true,
-            message: "Social media created successfully",
-            data: result.rows[0]
-        });
-
-    } catch (error) {
-
-        console.error(error);
-
-        res.status(500).json({
-            success: false,
-            message: "Server Error"
-        });
-
+    if (!name || !url) {
+      return res.status(400).json({
+        success: false,
+        message: "Name and URL are required",
+      });
     }
+
+    
+    let image = null;
+
+   
+    if (req.file) {
+      image = req.file.location || req.file.path;
+    }
+
+   
+    if (req.files?.image?.[0]) {
+      image =
+        req.files.image[0].location ||
+        req.files.image[0].path;
+    }
+
+    console.log("Uploaded Image:", image);
+
+    const result = await pool.query(
+      `INSERT INTO social_media (name, url, image)
+       VALUES ($1,$2,$3)
+       RETURNING *`,
+      [name, url, image]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Social media created successfully",
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Create Social Media Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
 };
 
 const handleGetSocialmedia = async (req, res) => {

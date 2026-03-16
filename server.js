@@ -34,7 +34,7 @@ app.use("/api/user", userRoute)
 app.use("/api/promotion", PromotionRoute)
 app.use("/api/banner", bannerRoute)
 app.use("/api/course", courseRoute);
-app.use("/api/strime", strimeRoute);
+app.use("/api/stream", strimeRoute);
 app.use("/api/teacher", teacherRoute)
 app.use("/api/quiz", quizRoute)
 app.use("/api/social", socialmediaRoute)

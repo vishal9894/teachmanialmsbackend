@@ -143,23 +143,18 @@ const handleAddTopStudent = async (req, res) => {
   try {
 
 
-    const { name, streamid } = req.body;
+    const { name, streamid , video } = req.body;
 
-    if (!name || !streamid) {
+    if (!name || !streamid || !video) {
       return res.status(400).json({
         success: false,
         message: "Name and Stream ID are required",
       });
     }
 
-    const streamIdInt = Number(streamid);
-    if (isNaN(streamIdInt)) {
-      return res.status(400).json({
-        success: false,
-        message: "Stream ID must be a valid number",
-      });
-    }
-    if (!req.files || !req.files.avatar || !req.files.video) {
+    const streamIdInt = streamid;
+   
+    if (!req.files || !req.files.avatar ) {
       return res.status(400).json({
         success: false,
         message: "Avatar and Video are required",
@@ -167,9 +162,9 @@ const handleAddTopStudent = async (req, res) => {
     }
 
     const avatar = req.files.avatar[0].location;
-    const video = req.files.video[0].location;
+    
 
-    if (!avatar || !video) {
+    if (!avatar ) {
       return res.status(400).json({
         success: false,
         message: "File upload failed",

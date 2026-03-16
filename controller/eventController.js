@@ -98,6 +98,18 @@ const handleGetEvents = async (req, res) => {
   }
 };
 
+const handleGetAllEvents = async (req , res) =>{
+  try {
+    const result = await pool.query(
+      "SELECT * FROM course_events"
+    )
+
+    const data = result.rows.map((res)=>res)
+    res.status(200).json({success : true  , message : "fetch all events" , data})
+  } catch (error) {
+    
+  }
+}
 
 const handleDeleteEvents = async (req, res) => {
   try {
@@ -342,5 +354,6 @@ module.exports = {
   handlePublishEvents,
   handleCreateAttachment,
   handleGetAttachments,
-  handleDeleteAttachment
+  handleDeleteAttachment,
+  handleGetAllEvents
 };

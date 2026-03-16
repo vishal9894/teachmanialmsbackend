@@ -1,32 +1,34 @@
 const { pool } = require("../db/conntctDB");
 
-
 const handleCreateSetting = async (req, res) => {
   try {
     const { setting_key, setting_value, description } = req.body;
 
-    if (!setting_key || !setting_value) {
+    if (!setting_key || setting_value === undefined || setting_value === null) {
       return res.status(400).json({
         success: false,
         message: "setting_key and setting_value required",
       });
     }
 
+    
+    const stringValue = typeof setting_value === 'object' 
+      ? JSON.stringify(setting_value) 
+      : String(setting_value);
+
     const result = await pool.query(
       `
       INSERT INTO general_settings
       (setting_key, setting_value, description)
-      VALUES ($1,$2,$3)
-
+      VALUES ($1, $2, $3)
       ON CONFLICT (setting_key)
       DO UPDATE SET
         setting_value = EXCLUDED.setting_value,
         description = EXCLUDED.description,
         updated_at = NOW()
-
       RETURNING *;
       `,
-      [setting_key, setting_value, description]
+      [setting_key, stringValue, description || '']
     );
 
     res.json({
@@ -35,13 +37,14 @@ const handleCreateSetting = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    console.error(error);
+    console.error("Create setting error:", error);
     res.status(500).json({
       success: false,
-      message: "Server error",
+      message: "Server error: " + error.message,
     });
   }
 };
+
 const handleGetAllSettings = async (req, res) => {
   try {
     const result = await pool.query(
@@ -51,7 +54,27 @@ const handleGetAllSettings = async (req, res) => {
     const settings = {};
 
     result.rows.forEach((row) => {
-      settings[row.setting_key] = row.setting_value;
+      const key = row.setting_key;
+      const value = row.setting_value;
+      
+
+      try {
+        if (value.startsWith('{') && value.endsWith('}')) {
+          settings[key] = JSON.parse(value);
+        } else if (value === 'true') {
+          settings[key] = true;
+        } else if (value === 'false') {
+          settings[key] = false;
+        } else if (!isNaN(value) && value.trim() !== '') {
+
+          settings[key] = Number(value);
+        } else {
+          settings[key] = value;
+        }
+      } catch (e) {
+       
+        settings[key] = value;
+      }
     });
 
     res.json({
@@ -59,11 +82,13 @@ const handleGetAllSettings = async (req, res) => {
       data: settings,
     });
   } catch (err) {
-    res.status(500).json({ success: false });
+    console.error("Get settings error:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch settings" 
+    });
   }
 };
-
-
 
 const handleDeleteSetting = async (req, res) => {
   try {
@@ -79,7 +104,11 @@ const handleDeleteSetting = async (req, res) => {
       message: "Setting deleted",
     });
   } catch (err) {
-    res.status(500).json({ success: false });
+    console.error("Delete setting error:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to delete setting" 
+    });
   }
 };
 
@@ -87,15 +116,7 @@ const handleCreateRouteSetting = async (req, res) => {
   try {
     const { status, account_id, percentage } = req.body;
 
-
-
-
-    if (!account_id) {
-      return res.status(400).json({
-        success: false,
-        message: "account_id is required",
-      });
-    }
+   
 
     if (percentage == null) {
       return res.status(400).json({
@@ -103,7 +124,6 @@ const handleCreateRouteSetting = async (req, res) => {
         message: "percentage is required",
       });
     }
-
 
     const result = await pool.query(
       `
@@ -123,44 +143,44 @@ const handleCreateRouteSetting = async (req, res) => {
 
   } catch (error) {
     console.error("Create Route Setting Error:", error);
-
     res.status(500).json({
       success: false,
-      message: "Server error",
+      message: "Server error: " + error.message,
     });
   }
 };
 
 const handleGetRoutingAccount = async (req, res) => {
   try {
-
     const result = await pool.query(
-      "SELECT * FROM route_settings "
-    )
+      "SELECT * FROM route_settings ORDER BY created_at DESC"
+    );
 
-    const data = result.rows.map((res) => res);
-
-    res.status(200).json({ success: true, message: "get routing account", data });
+    res.status(200).json({ 
+      success: true, 
+      message: "Routing accounts fetched successfully", 
+      data: result.rows 
+    });
 
   } catch (error) {
-    console.log(error);
+    console.error("Get routing accounts error:", error);
     res.status(500).json({
       success: false,
-      message: "Server error",
+      message: "Server error: " + error.message,
     });
   }
-}
+};
 
 const handleDeleteRoutingAccount = async (req, res) => {
   try {
     const { id } = req.params;
+    
     if (!id) {
       return res.status(400).json({
         success: false,
         message: "ID is required",
       });
     }
-
 
     const isMatch = await pool.query(
       `SELECT id FROM route_settings WHERE id = $1`,
@@ -186,12 +206,18 @@ const handleDeleteRoutingAccount = async (req, res) => {
 
   } catch (error) {
     console.error("Delete Routing Account Error:", error);
-
     res.status(500).json({
       success: false,
-      message: "Server error",
+      message: "Server error: " + error.message,
     });
   }
 };
 
-module.exports = { handleCreateSetting, handleGetAllSettings, handleDeleteSetting, handleCreateRouteSetting, handleGetRoutingAccount , handleDeleteRoutingAccount }
+module.exports = { 
+  handleCreateSetting, 
+  handleGetAllSettings, 
+  handleDeleteSetting, 
+  handleCreateRouteSetting, 
+  handleGetRoutingAccount, 
+  handleDeleteRoutingAccount 
+};

@@ -1,52 +1,53 @@
 const { pool } = require("../db/conntctDB");
+
+
 const handleCreateTeacher = async (req, res) => {
-    try {
+  try {
+    const {
+      name,
+      account_id,
+      revenue_share,
+      assigned_course_id,
+      teacherdetails,
+      rating,
+    } = req.body;
 
-        const {
-            name,
-            account_id,
-            revenue_share,
-            assigned_course_id,
-            teacherdetails,
-            rating
-        } = req.body;
+    
+    const image = req.file?.location || req.file?.path || null;
 
-        const image = req.files?.image?.[0]?.location || null;
+    console.log("Uploaded Image:", image);
 
-        const result = await pool.query(
-            `INSERT INTO teachers
+    const result = await pool.query(
+      `INSERT INTO teachers
       (name, account_id, revenue_share, assigned_course_id, rating, teacherdetails, image)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *`,
-            [
-                name,
-                account_id,
-                revenue_share,
-                assigned_course_id,
-                rating,
-                teacherdetails,
-                image
-            ]
-        );
+      [
+        name,
+        account_id,
+        revenue_share,
+        assigned_course_id,
+        rating,
+        teacherdetails,
+        image,
+      ]
+    );
 
-        const data = result.rows.map(({ account_id, revenue_share, ...res }) => res)
+    const data = result.rows.map(({ account_id, revenue_share, ...res }) => res);
 
-        res.status(201).json({
-            success: true,
-            message: "Teacher created and course assigned",
-            data
-        });
+    res.status(201).json({
+      success: true,
+      message: "Teacher created successfully",
+      data,
+    });
+  } catch (error) {
+    console.error("Create Teacher Error:", error);
 
-    } catch (error) {
-
-        console.error("Create Teacher Error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Server Error"
-        });
-
-    }
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
 };
 const handleGetTeacher = async (req, res) => {
     try {
@@ -98,4 +99,21 @@ const handleGetTeacherById = async (req, res) => {
     }
 };
 
-module.exports = { handleCreateTeacher, handleGetTeacher, handleGetTeacherById };
+const handleDeleteTeacher = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query("DELETE FROM teachers WHERE id = $1 RETURNING *", [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Teacher not found" });
+    }
+
+    res.status(200).json({ success: true, message: "Teacher deleted successfully", data: result.rows[0] });
+  } catch (error) {
+    console.error("Delete Teacher Error:", error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
+module.exports = { handleCreateTeacher, handleGetTeacher, handleGetTeacherById , handleDeleteTeacher };

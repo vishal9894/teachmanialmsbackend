@@ -1,11 +1,12 @@
 const express = require("express");
-const { handleCreateEvent, handleGetEvents, handleDeleteEvents, handleUpdateEvents, handlePublishEvents, handleCreateAttachment, handleGetAttachments } = require("../controller/eventController");
+const { handleCreateEvent, handleGetEvents, handleDeleteEvents, handleUpdateEvents, handlePublishEvents, handleCreateAttachment, handleGetAttachments, handleGetAllEvents } = require("../controller/eventController");
 const upload = require("../middleware/multer")
 
 const route = express.Router();
 
 route.post("/create-event" , handleCreateEvent)
 route.get("/get-event/:id" , handleGetEvents);
+route.get("/get-event" , handleGetAllEvents);
 route.delete("/delete-event/:id" , handleDeleteEvents);
 route.put("/update-event/:id" , handleUpdateEvents)
 route.put("/publish-event/:id" ,handlePublishEvents);

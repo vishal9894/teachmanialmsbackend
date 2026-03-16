@@ -3,19 +3,27 @@ const { pool } = require("../db/conntctDB");
 const handleCreateStream = async (req, res) => {
     try {
         const { name, description } = req.body;
-        const image = req.file ? req.file.location : null; 
+        const image = req.file ? req.file.location : null;
+
+        const existing = await pool.query("SELECT * FROM streams WHERE name = $1", [name]);
+        if (existing.rows.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Stream name already exists. Please choose a different name.",
+            });
+        }
 
         const result = await pool.query(
             `INSERT INTO streams (name, description, image)
-             VALUES ($1, $2, $3)
-             RETURNING *`,
+       VALUES ($1, $2, $3)
+       RETURNING *`,
             [name, description, image]
         );
 
         res.status(201).json({
             success: true,
             message: "Stream created successfully",
-            data: result.rows[0]
+            data: result.rows[0],
         });
 
     } catch (error) {
@@ -23,33 +31,46 @@ const handleCreateStream = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Failed to create stream",
-            error: error.message
+            error: error.message,
         });
     }
 };
 
 const handleGetStream = async (req, res) => {
     try {
-        const result = await pool.query(
-            "SELECT * FROM streams"
-        )
-
-        
-        const data = result.rows.map((res) => res)
-        
-        const total = data.length;
-        res.status(200).json({ success: true, total, message: " fetch strime sucessfully", data });
-
+        const result = await pool.query("SELECT * FROM streams ORDER BY created_at DESC");
+        res.status(200).json({
+            success: true,
+            total: result.rows.length,
+            message: "Streams fetched successfully",
+            data: result.rows,
+        });
     } catch (error) {
-
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch streams",
+            error: error.message,
+        });
     }
-}
+};
 
 const handleUpdateStream = async (req, res) => {
     try {
         const { id } = req.params;
         const { name, description } = req.body;
         const image = req.file ? req.file.location : null;
+
+        const existing = await pool.query(
+            "SELECT * FROM streams WHERE name = $1 AND id != $2",
+            [name, id]
+        );
+        if (existing.rows.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Another stream with this name already exists.",
+            });
+        }
 
         const result = await pool.query(
             `UPDATE streams
@@ -63,16 +84,13 @@ const handleUpdateStream = async (req, res) => {
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Stream not found"
-            });
+            return res.status(404).json({ success: false, message: "Stream not found" });
         }
 
         res.status(200).json({
             success: true,
             message: "Stream updated successfully",
-            data: result.rows[0]
+            data: result.rows[0],
         });
 
     } catch (error) {
@@ -80,42 +98,45 @@ const handleUpdateStream = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Failed to update stream",
-            error: error.message
+            error: error.message,
         });
     }
 };
-const handleDeleteStream = async (req, res) => {
-  try {
-    const { id } = req.params;
 
-    const result = await pool.query(
-      `DELETE FROM streams
+const handleDeleteStream = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const result = await pool.query(
+            `DELETE FROM streams
        WHERE id = $1
        RETURNING *`,
-      [id]
-    );
+            [id]
+        );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Stream not found"
-      });
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Stream not found" });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Stream deleted successfully",
+            data: result.rows[0],
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to delete stream",
+            error: error.message,
+        });
     }
-
-    res.status(200).json({
-      success: true,
-      message: "Stream deleted successfully",
-      data: result.rows[0]
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to delete stream",
-      error: error.message
-    });
-  }
 };
 
-module.exports = { handleCreateStream, handleGetStream , handleUpdateStream , handleDeleteStream };
+module.exports = {
+    handleCreateStream,
+    handleGetStream,
+    handleUpdateStream,
+    handleDeleteStream,
+};

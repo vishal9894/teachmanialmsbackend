@@ -7,13 +7,13 @@ const GenerateAccessToken = (user, sessionId) => {
   return jwt.sign(
     {
       id: user.id,
-      email: user.email ,
+      email: user.email,
       role: user.role,
       sessionId: sessionId,
     },
     process.env.SECRET_ACTIVE_TOKEN,
     {
-      expiresIn: "15m",  
+      expiresIn: "7h",
     }
   );
 };
