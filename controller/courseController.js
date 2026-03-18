@@ -304,14 +304,14 @@ const handleCreateFolder = async (req, res) => {
   try {
     const { courseId, name, parentId } = req.body;
 
-     const image = req.file?.location; 
+    const image = req.file?.location;
 
     const result = await pool.query(
       `INSERT INTO course_contents
        (course_id,name,type,parent_id , image)
        VALUES($1,$2,'folder',$3 , $4)
        RETURNING *`,
-      [courseId, name, normalizeParentId(parentId) , image]
+      [courseId, name, normalizeParentId(parentId), image]
     );
 
     res.status(201).json({
@@ -615,6 +615,185 @@ const handlePurchaseCourse = async (req, res) => {
   }
 };
 
+const handleAssignMultipleCourses = async (req, res) => {
+  try {
+    const { userId, courseIds , } = req.body;
+
+    // ---------------- VALIDATION ----------------
+    if (!userId || !Array.isArray(courseIds) || courseIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "userId and courseIds required",
+      });
+    }
+
+    const userCheck = await pool.query(
+      `SELECT id FROM users WHERE id = $1`,
+      [userId]
+    );
+
+    if (userCheck.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+    const courseCheck = await pool.query(
+      `SELECT id FROM courses WHERE id = ANY($1::uuid[])`,
+      [courseIds]
+    );
+
+    if (courseCheck.rowCount !== courseIds.length) {
+      const existingCourseIds = courseCheck.rows.map(row => row.id);
+      const missingCourses = courseIds.filter(id => !existingCourseIds.includes(id));
+
+      return res.status(404).json({
+        success: false,
+        message: `Some courses not found: ${missingCourses.join(', ')}`,
+      });
+    }
+
+    const existingCourses = await pool.query(
+      `SELECT course_id
+       FROM course_enrollments
+       WHERE user_id = $1
+       AND course_id = ANY($2::uuid[])`,
+      [userId, courseIds]
+    );
+
+    const alreadyAssigned = existingCourses.rows.map(
+      (row) => row.course_id
+    );
+
+   
+    const newCourses = courseIds.filter(
+      (id) => !alreadyAssigned.includes(id)
+    );
+
+    if (newCourses.length > 0) {
+      const insertPromises = newCourses.map(courseId =>
+        pool.query(
+          `INSERT INTO course_enrollments (user_id, course_id, created_at)
+           VALUES ($1, $2, NOW())`,
+          [userId, courseId]
+        )
+      );
+
+      await Promise.all(insertPromises);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Course assignment completed",
+      assignedCount: newCourses.length,
+      alreadyAssignedCount: alreadyAssigned.length,
+      alreadyAssigned,
+    });
+
+  } catch (error) {
+    console.error("Assign Courses Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Server error: " + error.message,
+    });
+  }
+};
+
+const handleGetAssignCourse = async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM course_enrollments ORDER BY created_at DESC`
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Fetch assign courses successfully",
+      data: result.rows
+    });
+
+  } catch (error) {
+    console.error("Error fetching assigned courses:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch assigned courses",
+      error: error.message
+    });
+  }
+};
+const handleDeleteAssingCourse = async (req, res) => {
+  try {
+    // Get parameters from query string instead of body
+    const { userId, courseId } = req.query;
+
+    // Convert single courseId to array for consistency
+    const courseIds = [courseId];
+
+    console.log("Query params:", { userId, courseId });
+
+    // ---------------- VALIDATION ----------------
+    if (!userId || !courseId) {
+      return res.status(400).json({
+        success: false,
+        message: "userId and courseId required",
+      });
+    }
+
+    // ---------------- CHECK USER ----------------
+    const userCheck = await pool.query(
+      `SELECT id FROM users WHERE id = $1`,
+      [userId]
+    );
+
+    if (userCheck.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // ---------------- CHECK EXISTING ASSIGNMENTS ----------------
+    const existing = await pool.query(
+      `SELECT course_id
+       FROM course_enrollments
+       WHERE user_id = $1
+       AND course_id = ANY($2::uuid[])`,
+      [userId, courseIds]
+    );
+
+    if (existing.rowCount === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No assigned courses found to delete",
+      });
+    }
+
+    // ---------------- DELETE COURSES ----------------
+    await pool.query(
+      `DELETE FROM course_enrollments
+       WHERE user_id = $1
+       AND course_id = ANY($2::uuid[])`,
+      [userId, courseIds]
+    );
+
+    // ---------------- RESPONSE ----------------
+    res.status(200).json({
+      success: true,
+      message: "Assigned courses removed successfully",
+      deletedCount: existing.rowCount,
+    });
+
+  } catch (error) {
+    console.error("Delete Assigned Course Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+
 const handleMyCourses = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -626,9 +805,9 @@ const handleMyCourses = async (req, res) => {
     WHERE ce.user_id = $1
   `, [userId]);
 
-  const data = courses.rows[0]
+    const data = courses.rows[0]
 
-    res.status(200).json({success : true , message : " fetch purchage course sucessfully" , data})
+    res.status(200).json({ success: true, message: " fetch purchage course sucessfully", data })
 
   } catch (error) {
 
@@ -646,5 +825,8 @@ module.exports = {
   handleUploadFile,
   handleDeleteContent,
   handlePurchaseCourse,
-  handleMyCourses
+  handleMyCourses,
+  handleAssignMultipleCourses,
+  handleGetAssignCourse,
+  handleDeleteAssingCourse
 };
