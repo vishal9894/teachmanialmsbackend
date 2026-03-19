@@ -619,7 +619,6 @@ const handleAssignMultipleCourses = async (req, res) => {
   try {
     const { userId, courseIds , } = req.body;
 
-    // ---------------- VALIDATION ----------------
     if (!userId || !Array.isArray(courseIds) || courseIds.length === 0) {
       return res.status(400).json({
         success: false,
@@ -724,15 +723,12 @@ const handleGetAssignCourse = async (req, res) => {
 };
 const handleDeleteAssingCourse = async (req, res) => {
   try {
-    // Get parameters from query string instead of body
     const { userId, courseId } = req.query;
 
-    // Convert single courseId to array for consistency
     const courseIds = [courseId];
 
     console.log("Query params:", { userId, courseId });
 
-    // ---------------- VALIDATION ----------------
     if (!userId || !courseId) {
       return res.status(400).json({
         success: false,
@@ -740,7 +736,6 @@ const handleDeleteAssingCourse = async (req, res) => {
       });
     }
 
-    // ---------------- CHECK USER ----------------
     const userCheck = await pool.query(
       `SELECT id FROM users WHERE id = $1`,
       [userId]
@@ -753,7 +748,6 @@ const handleDeleteAssingCourse = async (req, res) => {
       });
     }
 
-    // ---------------- CHECK EXISTING ASSIGNMENTS ----------------
     const existing = await pool.query(
       `SELECT course_id
        FROM course_enrollments
@@ -769,7 +763,6 @@ const handleDeleteAssingCourse = async (req, res) => {
       });
     }
 
-    // ---------------- DELETE COURSES ----------------
     await pool.query(
       `DELETE FROM course_enrollments
        WHERE user_id = $1
@@ -777,7 +770,6 @@ const handleDeleteAssingCourse = async (req, res) => {
       [userId, courseIds]
     );
 
-    // ---------------- RESPONSE ----------------
     res.status(200).json({
       success: true,
       message: "Assigned courses removed successfully",
@@ -797,7 +789,8 @@ const handleDeleteAssingCourse = async (req, res) => {
 const handleMyCourses = async (req, res) => {
   try {
     const userId = req.user.id;
-
+     console.log(userId);
+     
     const courses = await pool.query(`
     SELECT c.*
     FROM course_enrollments ce
@@ -805,7 +798,10 @@ const handleMyCourses = async (req, res) => {
     WHERE ce.user_id = $1
   `, [userId]);
 
-    const data = courses.rows[0]
+    const data = courses.rows
+
+    console.log(data);
+    
 
     res.status(200).json({ success: true, message: " fetch purchage course sucessfully", data })
 

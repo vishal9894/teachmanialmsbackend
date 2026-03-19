@@ -8,15 +8,12 @@ const handleSignup = async (req, res) => {
   try {
     const { name, email, password, phone_number, city } = req.body;
 
-    // 🔹 Basic Validation
     if (!name || !email || !password) {
       return res.status(400).json({ message: "All required fields missing" });
     }
 
-    // 🔹 Normalize email
     const normalizedEmail = email.toLowerCase();
 
-    // 🔹 Check existing user
     const userExist = await pool.query(
       "SELECT * FROM users WHERE email = $1",
       [normalizedEmail]
@@ -26,13 +23,10 @@ const handleSignup = async (req, res) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    // 🔹 Hash password
     const hashpassword = await bcrypt.hash(password, 10);
 
-    // 🔹 Generate session ID BEFORE insert (optimization)
     const sessionId = crypto.randomBytes(32).toString("hex");
 
-    // 🔹 Insert user (FIXED: added phone_number, city, session_id)
     const result = await pool.query(
       `INSERT INTO users 
        (name, email, password, phone_number, city, login_count, session_id)
@@ -43,7 +37,6 @@ const handleSignup = async (req, res) => {
 
     const user = result.rows[0];
 
-    // 🔹 Generate tokens
     const accessToken = GenerateAccessToken(user, sessionId);
 
     const refreshToken = crypto.randomBytes(64).toString("hex");
@@ -53,14 +46,12 @@ const handleSignup = async (req, res) => {
       .update(refreshToken)
       .digest("hex");
 
-    // 🔹 Store refresh token
     await pool.query(
       `INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
        VALUES ($1, $2, NOW() + INTERVAL '7 days')`,
       [user.id, hash]
     );
 
-    // 🔹 Remove password from response
     const { password: _, ...safeUser } = user;
 
     res.status(201).json({
@@ -260,30 +251,25 @@ const handleGetProfile = async (req, res) => {
 
 const handleGetAllProfile = async (req, res) => {
   try {
-    // 🔹 Query params
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const search = req.query.search || "";
 
     const offset = (page - 1) * limit;
 
-    // 🔹 Base query
     let query = `SELECT * FROM users`;
     let countQuery = `SELECT COUNT(*) FROM users`;
     let values = [];
 
-    // 🔹 Search by phone number
     if (search) {
       query += ` WHERE phone_number ILIKE $1`;
       countQuery += ` WHERE phone_number ILIKE $1`;
       values.push(`%${search}%`);
     }
 
-    // 🔹 Add pagination
     query += ` ORDER BY created_at DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
     values.push(limit, offset);
 
-    // 🔹 Execute queries
     const result = await pool.query(query, values);
 
     const countValues = search ? [`%${search}%`] : [];
@@ -291,7 +277,6 @@ const handleGetAllProfile = async (req, res) => {
 
     const total = parseInt(totalResult.rows[0].count);
 
-    // 🔹 Remove password
     const users = result.rows.map(({ password, ...rest }) => rest);
 
     res.json({

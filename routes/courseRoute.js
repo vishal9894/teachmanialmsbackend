@@ -1,6 +1,7 @@
 const express = require("express");
-const { handleCreateCourse, handleGetCourse, handleUpdatePublish, handleUpdateCourse, handleDeleteCourse, handleCreateFolder, handleUploadFile, handleGetFolderContent, handleDeleteContent, handlePurchaseCourse, handleAssignMultipleCourses, handleGetAssignCourse, handleDeleteAssingCourse } = require("../controller/courseController");
+const { handleCreateCourse, handleGetCourse, handleUpdatePublish, handleUpdateCourse, handleDeleteCourse, handleCreateFolder, handleUploadFile, handleGetFolderContent, handleDeleteContent, handlePurchaseCourse, handleAssignMultipleCourses, handleGetAssignCourse, handleDeleteAssingCourse, handleMyCourses } = require("../controller/courseController");
 const upload = require("../middleware/multer");
+const authMiddleware = require("../middleware/authMiddleware");
 
 const route = express.Router();
 
@@ -22,5 +23,6 @@ route.post("/buy-course", handlePurchaseCourse);
 route.post("/assign-course", handleAssignMultipleCourses);
 route.get("/get-assign-course" , handleGetAssignCourse);
 route.delete("/delete-assign-course" , handleDeleteAssingCourse)
+route.get("/my-course" ,authMiddleware,  handleMyCourses)
 
 module.exports = route;

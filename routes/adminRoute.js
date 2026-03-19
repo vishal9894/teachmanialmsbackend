@@ -1,5 +1,5 @@
 const express = require("express");
-const { handleCreateAdmin, handleLoginAdmin, handleGetAdmin, handleGetAllAdmin, handleUpdateAdmin, handleDeleteAdmin } = require("../controller/adminController");
+const { handleCreateAdmin, handleLoginAdmin, handleGetAdmin, handleGetAllAdmin, handleUpdateAdmin, handleDeleteAdmin, handleGetAllAdminWithRoles } = require("../controller/adminController");
 const authAdmin = require("../middleware/authAdmin");
 const upload = require("../middleware/multer");
 
@@ -11,6 +11,7 @@ route.get("/profile" ,authAdmin , handleGetAdmin);
 route.get("/all-admin" , handleGetAllAdmin);
 route.put("/update/:id" , upload.single("image"), handleUpdateAdmin );
 route.delete("/delete/:id" , handleDeleteAdmin)
+route.get("/all-with-roles",authAdmin , handleGetAllAdminWithRoles)
 
 
 

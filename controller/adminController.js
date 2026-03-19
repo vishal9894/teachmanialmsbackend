@@ -136,13 +136,13 @@ const handleGetAdmin = async (req, res) => {
     try {
         const adminId = req.admin.id;
         const result = await pool.query(`
-      SELECT id,name,email,phone_number,role,status,created_at
+      SELECT *
       FROM admin
       WHERE id=$1`, [adminId]);
-
+        const { password, refresh_tokens,role, role_id , ...data } = result.rows[0];
         res.json({
             success: true,
-            data: result.rows[0],
+            data: data,
         });
 
     } catch (error) {
@@ -274,11 +274,39 @@ const handleDeleteAdmin = async (req, res) => {
     }
 }
 
+const handleGetAllAdminWithRoles = async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT a.*, r.name as role_name, r.description as role_description,
+                   COUNT(DISTINCT rp.permission_id) as role_permission_count
+            FROM admin a
+            LEFT JOIN roles r ON a.role_id = r.id
+            LEFT JOIN role_permissions rp ON r.id = rp.role_id
+            GROUP BY a.id, r.id, r.name, r.description
+            ORDER BY a.created_at DESC
+        `);
+
+        const data = result.rows.map(({ password, refresh_tokens, ...rest }) => rest);
+        res.status(200).json({ 
+            success: true, 
+            message: "fetch all admin", 
+            data 
+        });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({
+            success: false,
+            message: "Server Error"
+        });
+    }
+};
+
 module.exports = {
     handleCreateAdmin,
     handleLoginAdmin,
     handleGetAdmin,
     handleGetAllAdmin,
     handleUpdateAdmin,
-    handleDeleteAdmin
+    handleDeleteAdmin,
+    handleGetAllAdminWithRoles
 };

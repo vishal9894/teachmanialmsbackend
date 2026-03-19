@@ -13,6 +13,7 @@ const eventRoute = require("./routes/eventRoute");
 const settingRoute = require("./routes/settingRoute")
 const bulkQuestionRoute = require("./routes/bulkQuestionRoute")
 const adminRoute = require("./routes/adminRoute");
+const rolePermissionRoute = require("./routes/rolePermissionRoutes");
 const cors = require("cors");
 
 
@@ -43,6 +44,7 @@ app.use("/api/event", eventRoute);
 app.use("/api/setting" , settingRoute);
 app.use("/api/bulkquestion" , bulkQuestionRoute);
 app.use("/api/admin" , adminRoute);
+app.use("/api/permission" , rolePermissionRoute)
 
 
 app.listen(port, () => {
