@@ -8,7 +8,7 @@ const GenerateAccessToken = (user, sessionId) => {
     {
       id: user.id,
       email: user.email,
-      role: user.role,
+      role: user.role || "users",
       sessionId: sessionId,
     },
     process.env.SECRET_ACTIVE_TOKEN,
