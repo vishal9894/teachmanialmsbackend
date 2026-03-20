@@ -12,6 +12,27 @@ const normalizeParentId = (parentId) => {
   return parentId;
 };
 
+const normalizeUUID = (value) => {
+  if (
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    value === "null"
+  ) {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  if (typeof value === "string" && value.startsWith("{")) {
+    return value.replace(/[{}"]/g, "").split(",")[0];
+  }
+
+  return value;
+};
+
 const handleCreateCourse = async (req, res) => {
   try {
     const {
@@ -328,18 +349,32 @@ const handleCreateFolder = async (req, res) => {
 
 const handleUploadFile = async (req, res) => {
   try {
-    const {
+    let {
       courseId,
       parentId,
       contentType,
       quizId,
       title,
-      metadata
+      name,
+      videoLink,
+      source,
+      access,
+      description,
+      duration,
+      categories,
+      negativeMarking,
+      negativeMarks,
+      testAccess,
+      testType,
+      postedBy,
+      advancedMode
     } = req.body;
 
-    const file = req.file;
+    courseId = normalizeUUID(courseId);
+    parentId = normalizeUUID(parentId);
+    quizId = normalizeUUID(quizId);
 
-    /* ------------ VALIDATION ------------ */
+    const file = req.file;
 
     if (!courseId) {
       return res.status(400).json({
@@ -348,20 +383,6 @@ const handleUploadFile = async (req, res) => {
       });
     }
 
-    /* ------------ PARSE METADATA ------------ */
-    let meta = {};
-    if (metadata) {
-      try {
-        meta = JSON.parse(metadata);
-      } catch (err) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid metadata JSON",
-        });
-      }
-    }
-
-    /* ------------ COURSE CHECK ------------ */
     const courseCheck = await pool.query(
       "SELECT id FROM courses WHERE id=$1",
       [courseId]
@@ -374,131 +395,186 @@ const handleUploadFile = async (req, res) => {
       });
     }
 
-    /* ------------ PARENT CHECK ------------ */
-    if (parentId) {
-      const parentCheck = await pool.query(
-        "SELECT id,type FROM course_contents WHERE id=$1",
-        [parentId]
-      );
-
-      if (!parentCheck.rows.length) {
-        return res.status(400).json({
-          success: false,
-          message: "Parent not found",
-        });
-      }
-
-      if (!["folder", "video"].includes(parentCheck.rows[0].type)) {
-        return res.status(400).json({
-          success: false,
-          message: "Content allowed only inside folder or video",
-        });
-      }
-    }
-
-    /* ------------ CONTENT VARIABLES ------------ */
-
     let type = null;
     let fileUrl = null;
     let fileType = null;
     let referenceId = null;
-    let contentName = title || "Untitled";
+    let contentName = title || name || "Untitled";
 
-    /* ================= VIDEO ================= */
+   
     if (contentType === "video") {
-      if (!meta.link) {
+
+      if (!videoLink)
         return res.status(400).json({
           success: false,
           message: "Video link required",
         });
-      }
 
       type = "video";
-      fileUrl = meta.link;
+      fileUrl = videoLink;
       fileType = "video/link";
-    }
 
-    /* ================= TEST ================= */
-    else if (contentType === "test") {
-      if (!quizId) {
-        return res.status(400).json({
-          success: false,
-          message: "Quiz ID required",
-        });
+      let contentMetadata = {
+        source: source || "station1",
+        access: access || "free",
+      };
+
+      
+      if (file && file.mimetype.startsWith("image/")) {
+        contentMetadata.thumbnail = file.location || file.path;
       }
 
-      const quizCheck = await pool.query(
-        "SELECT id FROM quizzes WHERE id=$1",
-        [quizId]
+      const result = await pool.query(
+        `INSERT INTO course_contents
+        (course_id,name,type,parent_id,file_url,file_type,reference_id,metadata)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+        RETURNING *`,
+        [
+          courseId,
+          contentName,
+          type,
+          parentId || null,
+          fileUrl,
+          fileType,
+          referenceId,
+          JSON.stringify(contentMetadata),
+        ]
       );
 
-      if (!quizCheck.rows.length) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid quiz ID",
-        });
-      }
-
-      type = "test";
-      referenceId = quizId;
+      return res.status(201).json({
+        success: true,
+        message: "Video added successfully",
+        data: result.rows[0],
+      });
     }
 
-    /* ================= PDF ================= */
-    else if (contentType === "pdf") {
-      if (!file) {
+    
+    if (contentType === "pdf") {
+
+      if (!file)
         return res.status(400).json({
           success: false,
           message: "PDF file required",
         });
-      }
 
-      if (file.mimetype !== "application/pdf") {
+      if (file.mimetype !== "application/pdf")
         return res.status(400).json({
           success: false,
           message: "Only PDF allowed",
         });
-      }
 
       type = "pdf";
       fileUrl = file.location || file.path;
       fileType = file.mimetype;
-    }
 
-    else {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid content type",
+      let contentMetadata = {
+        access: access || "free",
+        downloadType: "public",
+      };
+
+      const result = await pool.query(
+        `INSERT INTO course_contents
+        (course_id,name,type,parent_id,file_url,file_type,reference_id,metadata)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+        RETURNING *`,
+        [
+          courseId,
+          contentName,
+          type,
+          parentId || null,
+          fileUrl,
+          fileType,
+          referenceId,
+          JSON.stringify(contentMetadata),
+        ]
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: "PDF added successfully",
+        data: result.rows[0],
       });
     }
 
-    /* ------------ INSERT ------------ */
+    
+    if (contentType === "test") {
 
-    const result = await pool.query(
-      `INSERT INTO course_contents
-       (course_id,name,type,parent_id,file_url,file_type,reference_id,metadata)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8)
-       RETURNING *`,
-      [
-        courseId,
-        contentName,
-        type,
-        parentId || null,
-        fileUrl,
-        fileType,
-        referenceId,
-        meta
-      ]
-    );
+      if (!name)
+        return res.status(400).json({
+          success: false,
+          message: "Test name required",
+        });
 
-    res.status(201).json({
-      success: true,
-      message: "Content added successfully",
-      data: result.rows[0],
+      let contentMetadata = {
+        description: description || "",
+        duration: duration || 0,
+        categories: categories ? JSON.parse(categories) : [],
+        negativeMarking:
+          negativeMarking === "true" || negativeMarking === true,
+        negativeMarks: negativeMarks || 0,
+        testAccess: testAccess || "free",
+        testType: testType || "Live",
+        postedBy: postedBy || "",
+        advancedMode:
+          advancedMode === "true" || advancedMode === true,
+      };
+
+      const result = await pool.query(
+        `INSERT INTO course_contents
+        (course_id,name,type,parent_id,file_url,file_type,reference_id,metadata)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+        RETURNING *`,
+        [
+          courseId,
+          contentName,
+          "test",
+          parentId || null,
+          null,
+          "application/json",
+          referenceId,
+          JSON.stringify(contentMetadata),
+        ]
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: "Test added successfully",
+        data: result.rows[0],
+      });
+    }
+
+    if (contentType === "event") {
+
+      const eventResult = await pool.query(
+        `INSERT INTO events
+        (course_id,folder_id,event_name,stream_link,event_description,event_banner,access,created_at,updated_at)
+        VALUES($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())
+        RETURNING *`,
+        [
+          courseId,
+          parentId || null,
+          contentName,
+          videoLink,
+          description || "",
+          file?.location || file?.path || null,
+          access || "free",
+        ]
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: "Event added successfully",
+        data: eventResult.rows[0],
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: "Invalid content type",
     });
 
   } catch (error) {
     console.error("Upload Error:", error);
-
     res.status(500).json({
       success: false,
       message: error.message,
@@ -521,11 +597,11 @@ const handleGetFolderContent = async (req, res) => {
       SELECT id, course_id, name, type, parent_id, file_url, file_type, reference_id
       FROM course_contents
       WHERE course_id = $1
+      AND type <> 'event'
       ORDER BY parent_id, name;
       `,
       [courseId]
     );
-
     const flatItems = result.rows;
 
     function buildTree(items, parentId = null) {
@@ -561,6 +637,9 @@ const handleDeleteContent = async (req, res) => {
 
   try {
     const { id } = req.params;
+
+    console.log(id);
+    
     await pool.query(
       `WITH RECURSIVE children AS (
         SELECT id FROM course_contents WHERE id=$1
@@ -617,7 +696,7 @@ const handlePurchaseCourse = async (req, res) => {
 
 const handleAssignMultipleCourses = async (req, res) => {
   try {
-    const { userId, courseIds , } = req.body;
+    const { userId, courseIds, } = req.body;
 
     if (!userId || !Array.isArray(courseIds) || courseIds.length === 0) {
       return res.status(400).json({
@@ -664,7 +743,7 @@ const handleAssignMultipleCourses = async (req, res) => {
       (row) => row.course_id
     );
 
-   
+
     const newCourses = courseIds.filter(
       (id) => !alreadyAssigned.includes(id)
     );
@@ -789,8 +868,8 @@ const handleDeleteAssingCourse = async (req, res) => {
 const handleMyCourses = async (req, res) => {
   try {
     const userId = req.user.id;
-     console.log(userId);
-     
+    console.log(userId);
+
     const courses = await pool.query(`
     SELECT c.*
     FROM course_enrollments ce
@@ -801,7 +880,7 @@ const handleMyCourses = async (req, res) => {
     const data = courses.rows
 
     console.log(data);
-    
+
 
     res.status(200).json({ success: true, message: " fetch purchage course sucessfully", data })
 
