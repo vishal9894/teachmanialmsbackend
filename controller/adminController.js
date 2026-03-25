@@ -139,7 +139,7 @@ const handleGetAdmin = async (req, res) => {
       SELECT *
       FROM admin
       WHERE id=$1`, [adminId]);
-        const { password, refresh_tokens,role, role_id , ...data } = result.rows[0];
+        const { password, refresh_tokens, role_id , ...data } = result.rows[0];
         res.json({
             success: true,
             data: data,

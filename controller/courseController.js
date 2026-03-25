@@ -401,7 +401,7 @@ const handleUploadFile = async (req, res) => {
     let referenceId = null;
     let contentName = title || name || "Untitled";
 
-   
+
     if (contentType === "video") {
 
       if (!videoLink)
@@ -419,7 +419,7 @@ const handleUploadFile = async (req, res) => {
         access: access || "free",
       };
 
-      
+
       if (file && file.mimetype.startsWith("image/")) {
         contentMetadata.thumbnail = file.location || file.path;
       }
@@ -448,7 +448,7 @@ const handleUploadFile = async (req, res) => {
       });
     }
 
-    
+
     if (contentType === "pdf") {
 
       if (!file)
@@ -496,7 +496,7 @@ const handleUploadFile = async (req, res) => {
       });
     }
 
-    
+
     if (contentType === "test") {
 
       if (!name)
@@ -594,16 +594,58 @@ const handleGetFolderContent = async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT id, course_id, name, type, parent_id, file_url, file_type, reference_id
-      FROM course_contents
-      WHERE course_id = $1
-      AND type <> 'event'
-      ORDER BY parent_id, name;
+      SELECT 
+        cc.id,
+        cc.course_id,
+        cc.name,
+        cc.type,
+        cc.parent_id,
+        cc.file_url,
+        cc.file_type,
+        cc.reference_id,
+        ca.id AS attachment_id,
+        ca.file_url AS attachment_url,
+        ca.title,
+        ca.attachment_type
+      FROM course_contents cc
+      LEFT JOIN content_attachments ca
+        ON cc.id = ca.content_id
+      WHERE cc.course_id = $1
+      ORDER BY cc.parent_id NULLS FIRST, cc.name;
       `,
       [courseId]
     );
-    const flatItems = result.rows;
 
+    /* ---------- GROUP ATTACHMENTS ---------- */
+    const map = new Map();
+
+    result.rows.forEach(row => {
+      if (!map.has(row.id)) {
+        map.set(row.id, {
+          id: row.id,
+          name: row.name,
+          type: row.type,
+          parent_id: row.parent_id,
+          file_url: row.file_url,
+          file_type: row.file_type,
+          reference_id: row.reference_id,
+          attachments: [],
+        });
+      }
+
+      if (row.attachment_id) {
+        map.get(row.id).attachments.push({
+          id: row.attachment_id,
+          title: row.title,
+          type: row.attachment_type,
+          file_url: row.attachment_url,
+        });
+      }
+    });
+
+    const flatItems = Array.from(map.values());
+
+    /* ---------- BUILD TREE ---------- */
     function buildTree(items, parentId = null) {
       return items
         .filter(i => i.parent_id === parentId)
@@ -614,6 +656,7 @@ const handleGetFolderContent = async (req, res) => {
           file_url: i.file_url,
           file_type: i.file_type,
           reference_id: i.reference_id,
+          attachments: i.attachments,
           children: buildTree(items, i.id),
         }));
     }
@@ -634,12 +677,9 @@ const handleGetFolderContent = async (req, res) => {
   }
 };
 const handleDeleteContent = async (req, res) => {
-
   try {
     const { id } = req.params;
 
-    console.log(id);
-    
     await pool.query(
       `WITH RECURSIVE children AS (
         SELECT id FROM course_contents WHERE id=$1
@@ -654,12 +694,9 @@ const handleDeleteContent = async (req, res) => {
       [id]
     );
 
-
-
     res.json({ success: true, message: "Deleted successfully" });
 
   } catch (error) {
-
     console.error(error);
     res.status(500).json({ success: false });
   }
