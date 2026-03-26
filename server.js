@@ -1,6 +1,8 @@
 const express = require("express");
+const cookieParser = require("cookie-parser");
 const { connectDB } = require("./db/conntctDB");
 require("dotenv").config();
+const errorMiddleware = require("./middleware/errorMiddleware")
 const userRoute = require("./routes/userRoute");
 const PromotionRoute = require("./routes/promotionRoute");
 const bannerRoute = require("./routes/bannerRoute");
@@ -25,12 +27,14 @@ const port = process.env.PORT || 4000
 connectDB();
 
 app.use(cors());
+app.use(cookieParser());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.get("/", (req, res) => {
     res.send("server is running")
 })
+
 
 app.use("/api/user", userRoute)
 app.use("/api/promotion", PromotionRoute)
@@ -41,11 +45,12 @@ app.use("/api/teacher", teacherRoute)
 app.use("/api/quiz", quizRoute)
 app.use("/api/social", socialmediaRoute)
 app.use("/api/event", eventRoute);
-app.use("/api/setting" , settingRoute);
-app.use("/api/bulkquestion" , bulkQuestionRoute);
-app.use("/api/admin" , adminRoute);
-app.use("/api/permission" , rolePermissionRoute)
+app.use("/api/setting", settingRoute);
+app.use("/api/bulkquestion", bulkQuestionRoute);
+app.use("/api/admin", adminRoute);
+app.use("/api/permission", rolePermissionRoute)
 
+app.use(errorMiddleware);
 
 app.listen(port, () => {
     console.log(`server is running port ${port}`);

@@ -1,7 +1,9 @@
 const { pool } = require("../db/conntctDB");
+const catchAsync = require("../utils/catchAsync");
+const ApiError = require("../utils/apiError");
+const sendResponse = require("../utils/response");
 
-
-const handleCreateEvent = async (req, res) => {
+const handleCreateEvent = catchAsync(async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -16,6 +18,10 @@ const handleCreateEvent = async (req, res) => {
       event_banner,
       category_name
     } = req.body;
+
+    if (!course_id || !event_name) {
+      throw new ApiError(400, "Course ID and event name are required");
+    }
 
     await client.query("BEGIN");
 
@@ -40,7 +46,6 @@ const handleCreateEvent = async (req, res) => {
 
     const event = eventResult.rows[0];
 
-
     await client.query(
       `INSERT INTO course_contents
       (course_id,name,type,parent_id,event_id)
@@ -50,417 +55,336 @@ const handleCreateEvent = async (req, res) => {
 
     await client.query("COMMIT");
 
-    res.status(201).json({
-      success: true,
+    sendResponse(res, {
+      statusCode: 201,
+      message: "Event created successfully",
       data: event
     });
 
   } catch (error) {
     await client.query("ROLLBACK");
-    console.error(error);
-
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    throw error;
   } finally {
     client.release();
   }
-};
+});
 
+const handleGetEvents = catchAsync(async (req, res) => {
+  const folderid = req.params.id;
 
-const handleGetEvents = async (req, res) => {
-  try {
-    const folderid = req.params.id;
+  const result = await pool.query(
+    `
+    SELECT 
+      e.*,
+      f.name AS folder_name
+    FROM course_events e
+    LEFT JOIN course_contents f
+      ON e.folder_id = f.id
+    WHERE e.folder_id IS NOT DISTINCT FROM $1
+    ORDER BY e.created_at DESC
+    `,
+    [folderid || null]
+  );
 
-    const result = await pool.query(
-      `
-      SELECT 
-        e.*,
-        f.name AS folder_name
-      FROM course_events e
-      LEFT JOIN course_contents f
-        ON e.folder_id = f.id
-      WHERE e.folder_id IS NOT DISTINCT FROM $1
-      ORDER BY e.created_at DESC
-      `,
-      [folderid || null]
-    );
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Events fetched successfully",
+    total: result.rows.length,
+    data: result.rows
+  });
+});
 
-    res.json({
-      success: true,
-      data: result.rows
-    });
+const handleGetAllEvents = catchAsync(async (req, res) => {
+  const result = await pool.query(
+    "SELECT * FROM course_events ORDER BY created_at DESC"
+  );
 
-  } catch (error) {
-    console.error("Get Events Error:", error);
-    res.status(500).json({ success: false });
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Fetch all events successfully",
+    total: result.rows.length,
+    data: result.rows
+  });
+});
+
+const handleDeleteEvents = catchAsync(async (req, res) => {
+  const { id } = req.params;
+
+  const isMatch = await pool.query(
+    "SELECT id FROM course_events WHERE id=$1",
+    [id]
+  );
+
+  if (!isMatch.rowCount) {
+    throw new ApiError(404, "Event does not exist");
   }
-};
 
-const handleGetAllEvents = async (req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT * FROM course_events"
-    )
+  await pool.query("DELETE FROM course_events WHERE id=$1", [id]);
+  await pool.query("DELETE FROM course_contents WHERE event_id=$1", [id]);
 
-    const data = result.rows.map((res) => res)
-    res.status(200).json({ success: true, message: "fetch all events", data })
-  } catch (error) {
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Event deleted successfully"
+  });
+});
 
+const handleUpdateEvents = catchAsync(async (req, res) => {
+  const { id } = req.params;
+
+  const {
+    access,
+    publish,
+    event_name,
+    stream_link,
+    event_description,
+    event_banner
+  } = req.body;
+
+  const checkExists = await pool.query(
+    "SELECT id FROM course_events WHERE id=$1::uuid",
+    [id]
+  );
+
+  if (!checkExists.rowCount) {
+    throw new ApiError(404, "Event does not exist");
   }
-}
 
-const handleDeleteEvents = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const isMatch = await pool.query(
-      "SELECT id FROM course_events WHERE id=$1",
-      [id]
-    );
-
-    if (!isMatch.rowCount) {
-      return res.status(404).json({
-        success: false,
-        message: "Event does not exist"
-      });
-    }
-
-    await pool.query("DELETE FROM course_events WHERE id=$1", [id]);
-    await pool.query("DELETE FROM course_contents WHERE event_id=$1", [id]);
-
-    res.json({
-      success: true,
-      message: "Event deleted successfully"
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false });
-  }
-};
-
-
-const handleUpdateEvents = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const {
+  const result = await pool.query(
+    `UPDATE course_events
+     SET access=$1,
+         publish=$2,
+         event_name=$3,
+         stream_link=$4,
+         event_description=$5,
+         event_banner=$6,
+         updated_at=NOW()
+     WHERE id=$7::uuid
+     RETURNING *`,
+    [
       access,
       publish,
       event_name,
       stream_link,
       event_description,
-      event_banner
-    } = req.body;
+      event_banner,
+      id
+    ]
+  );
 
-    const result = await pool.query(
-      `UPDATE course_events
-       SET access=$1,
-           publish=$2,
-           event_name=$3,
-           stream_link=$4,
-           event_description=$5,
-           event_banner=$6,
-           updated_at=NOW()
-       WHERE id=$7::uuid
-       RETURNING *`,
-      [
-        access,
-        publish,
-        event_name,
-        stream_link,
-        event_description,
-        event_banner,
-        id
-      ]
-    );
+  await pool.query(
+    `UPDATE course_contents
+     SET name=$1
+     WHERE event_id=$2::uuid`,
+    [event_name, id]
+  );
 
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Event updated successfully",
+    data: result.rows[0]
+  });
+});
 
-    await pool.query(
-      `UPDATE course_contents
-       SET name=$1
-       WHERE event_id=$2::uuid`,
-      [event_name, id]
-    );
+const handlePublishEvents = catchAsync(async (req, res) => {
+  const { id } = req.params;
 
-    res.json({
-      success: true,
-      data: result.rows[0]
-    });
+  const check = await pool.query(
+    "SELECT publish FROM course_events WHERE id=$1::uuid",
+    [id]
+  );
 
-  } catch (error) {
-    console.error("Update Event Error:", error.message);
-    res.status(500).json({ success: false });
+  if (!check.rowCount) {
+    throw new ApiError(404, "Event does not exist");
   }
-};
 
-const handlePublishEvents = async (req, res) => {
-  try {
-    const { id } = req.params;
+  const newStatus = !check.rows[0].publish;
 
-    const check = await pool.query(
-      "SELECT publish FROM course_events WHERE id=$1::uuid",
-      [id]
+  const result = await pool.query(
+    `UPDATE course_events
+     SET publish=$1, updated_at=NOW()
+     WHERE id=$2::uuid
+     RETURNING *`,
+    [newStatus, id]
+  );
+
+  sendResponse(res, {
+    statusCode: 200,
+    message: `Event ${newStatus ? "published" : "unpublished"} successfully`,
+    data: result.rows[0]
+  });
+});
+
+const handleCreateAttachment = catchAsync(async (req, res) => {
+  let {
+    content_id,
+    event_id,
+    title,
+    attachment_type,
+    file_url,
+    external_link,
+    test_id,
+  } = req.body;
+
+  if (!title || !attachment_type) {
+    throw new ApiError(400, "title and attachment_type are required");
+  }
+
+  if (file_url && file_url.startsWith("blob:")) {
+    throw new ApiError(400, "Invalid file_url. Upload file first and send real URL.");
+  }
+
+  let finalContentId = null;
+
+  if (content_id) {
+    const contentCheck = await pool.query(
+      `SELECT id FROM course_contents WHERE id = $1`,
+      [content_id]
     );
 
-    if (!check.rowCount) {
-      return res.status(404).json({
-        success: false,
-        message: "Event does not exist"
-      });
+    if (contentCheck.rows.length) {
+      finalContentId = content_id;
     }
+  }
 
-    const newStatus = !check.rows[0].publish;
-
-    const result = await pool.query(
-      `UPDATE course_events
-       SET publish=$1, updated_at=NOW()
-       WHERE id=$2::uuid
-       RETURNING *`,
-      [newStatus, id]
+  if (!finalContentId && event_id) {
+    const eventContent = await pool.query(
+      `
+      SELECT id
+      FROM course_contents
+      WHERE event_id = $1
+      LIMIT 1
+      `,
+      [event_id]
     );
 
-    res.json({
-      success: true,
-      message: "Publish status updated",
-      data: result.rows[0]
-    });
-
-  } catch (error) {
-    console.error("Publish Event Error:", error.message);
-    res.status(500).json({ success: false });
+    if (eventContent.rows.length) {
+      finalContentId = eventContent.rows[0].id;
+    }
   }
-};
 
-const handleCreateAttachment = async (req, res) => {
-  try {
-    let {
+  if (!finalContentId && content_id) {
+    const fallback = await pool.query(
+      `
+      SELECT id
+      FROM course_contents
+      WHERE event_id = $1
+      LIMIT 1
+      `,
+      [content_id]
+    );
+
+    if (fallback.rows.length) {
+      finalContentId = fallback.rows[0].id;
+    }
+  }
+
+  if (!finalContentId) {
+    throw new ApiError(400, "Invalid content_id or event_id (no matching course content)");
+  }
+
+  if (attachment_type === "pdf" || attachment_type === "file") {
+    if (!file_url) {
+      throw new ApiError(400, "file_url required for file/pdf attachment");
+    }
+  }
+
+  if (attachment_type === "link" && !external_link) {
+    throw new ApiError(400, "external_link required");
+  }
+
+  if (attachment_type === "test" && !test_id) {
+    throw new ApiError(400, "test_id required");
+  }
+
+  const result = await pool.query(
+    `
+    INSERT INTO content_attachments
+    (
       content_id,
-      event_id,
       title,
       attachment_type,
       file_url,
       external_link,
-      test_id,
-    } = req.body;
+      test_id
+    )
+    VALUES ($1,$2,$3,$4,$5,$6)
+    RETURNING *
+    `,
+    [
+      finalContentId,
+      title,
+      attachment_type,
+      file_url || null,
+      external_link || null,
+      test_id || null,
+    ]
+  );
 
-    /* =====================================================
-       1️⃣ BASIC VALIDATION
-    ===================================================== */
+  sendResponse(res, {
+    statusCode: 201,
+    message: "Attachment created successfully",
+    data: result.rows[0],
+  });
+});
 
-    if (!title || !attachment_type) {
-      return res.status(400).json({
-        success: false,
-        message: "title and attachment_type are required",
-      });
-    }
+const handleGetAttachments = catchAsync(async (req, res) => {
+  const { id } = req.params;
 
-    /* =====================================================
-       2️⃣ DO NOT ALLOW BLOB URL (FRONTEND BUG FIX)
-    ===================================================== */
+  const result = await pool.query(
+    `
+    SELECT
+      attachment_type,
+      json_agg(
+        json_build_object(
+          'id',id,
+          'title',title,
+          'file_url',file_url,
+          'external_link',external_link,
+          'test_id',test_id
+        )
+      ) AS items
+    FROM content_attachments
+    WHERE content_id=$1
+    GROUP BY attachment_type
+    `,
+    [id]
+  );
 
-    if (file_url && file_url.startsWith("blob:")) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid file_url. Upload file first and send real URL.",
-      });
-    }
+  const response = { pdf: [], test: [], link: [] };
 
-    /* =====================================================
-       3️⃣ FIND VALID CONTENT_ID
-       (handles wrong id from frontend safely)
-    ===================================================== */
+  result.rows.forEach(r => {
+    response[r.attachment_type] = r.items;
+  });
 
-    let finalContentId = null;
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Attachments fetched successfully",
+    data: response
+  });
+});
 
-    // Case A — content_id provided
-    if (content_id) {
-      const contentCheck = await pool.query(
-        `SELECT id FROM course_contents WHERE id = $1`,
-        [content_id]
-      );
+const handleDeleteAttachment = catchAsync(async (req, res) => {
+  const { id } = req.params;
 
-      if (contentCheck.rows.length) {
-        finalContentId = content_id;
-      }
-    }
+  const checkExists = await pool.query(
+    "SELECT id FROM content_attachments WHERE id=$1",
+    [id]
+  );
 
-    // Case B — resolve using event_id
-    if (!finalContentId && event_id) {
-      const eventContent = await pool.query(
-        `
-        SELECT id
-        FROM course_contents
-        WHERE event_id = $1
-        LIMIT 1
-        `,
-        [event_id]
-      );
-
-      if (eventContent.rows.length) {
-        finalContentId = eventContent.rows[0].id;
-      }
-    }
-
-    // Case C — frontend passed event_id as content_id
-    if (!finalContentId && content_id) {
-      const fallback = await pool.query(
-        `
-        SELECT id
-        FROM course_contents
-        WHERE event_id = $1
-        LIMIT 1
-        `,
-        [content_id]
-      );
-
-      if (fallback.rows.length) {
-        finalContentId = fallback.rows[0].id;
-      }
-    }
-
-    // Still not found
-    if (!finalContentId) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid content_id or event_id (no matching course content)",
-      });
-    }
-
-    /* =====================================================
-       4️⃣ ATTACHMENT TYPE VALIDATION
-    ===================================================== */
-
-    if (attachment_type === "pdf" || attachment_type === "file") {
-      if (!file_url) {
-        return res.status(400).json({
-          success: false,
-          message: "file_url required for file/pdf attachment",
-        });
-      }
-    }
-
-    if (attachment_type === "link" && !external_link) {
-      return res.status(400).json({
-        success: false,
-        message: "external_link required",
-      });
-    }
-
-    if (attachment_type === "test" && !test_id) {
-      return res.status(400).json({
-        success: false,
-        message: "test_id required",
-      });
-    }
-
-    /* =====================================================
-       5️⃣ INSERT ATTACHMENT (FOREIGN KEY SAFE)
-    ===================================================== */
-
-    const result = await pool.query(
-      `
-      INSERT INTO content_attachments
-      (
-        content_id,
-        title,
-        attachment_type,
-        file_url,
-        external_link,
-        test_id
-      )
-      VALUES ($1,$2,$3,$4,$5,$6)
-      RETURNING *
-      `,
-      [
-        finalContentId,
-        title,
-        attachment_type,
-        file_url || null,
-        external_link || null,
-        test_id || null,
-      ]
-    );
-
-    /* =====================================================
-       6️⃣ SUCCESS RESPONSE
-    ===================================================== */
-
-    return res.status(201).json({
-      success: true,
-      message: "Attachment created successfully",
-      data: result.rows[0],
-    });
-  } catch (error) {
-    console.error("Create Attachment Error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Server error while creating attachment",
-    });
+  if (!checkExists.rows.length) {
+    throw new ApiError(404, "Attachment does not exist");
   }
-};
-const handleGetAttachments = async (req, res) => {
-  try {
-    const { id } = req.params;
 
-    const result = await pool.query(
-      `
-      SELECT
-        attachment_type,
-        json_agg(
-          json_build_object(
-            'id',id,
-            'title',title,
-            'file_url',file_url,
-            'external_link',external_link,
-            'test_id',test_id
-          )
-        ) AS items
-      FROM content_attachments
-      WHERE content_id=$1
-      GROUP BY attachment_type
-      `,
-      [id]
-    );
+  await pool.query(
+    `DELETE FROM content_attachments WHERE id=$1`,
+    [id]
+  );
 
-    const response = { pdf: [], test: [], link: [] };
-
-    result.rows.forEach(r => {
-      response[r.attachment_type] = r.items;
-    });
-
-    res.json({ success: true, data: response });
-
-  } catch (error) {
-    res.status(500).json({ success: false });
-  }
-};
-
-const handleDeleteAttachment = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    await pool.query(
-      `DELETE FROM event_attachments WHERE id=$1`,
-      [id]
-    );
-
-    res.json({
-      success: true,
-      message: "Attachment deleted successfully"
-    });
-
-  } catch (error) {
-    console.error("Delete Attachment Error:", error);
-    res.status(500).json({ success: false });
-  }
-};
-
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Attachment deleted successfully"
+  });
+});
 
 module.exports = {
   handleCreateEvent,

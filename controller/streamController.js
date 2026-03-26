@@ -1,142 +1,124 @@
 const { pool } = require("../db/conntctDB");
+const catchAsync = require("../utils/catchAsync");
+const ApiError = require("../utils/apiError");
+const sendResponse = require("../utils/response");
 
-const handleCreateStream = async (req, res) => {
-    try {
-        const { name, description } = req.body;
-        const image = req.file ? req.file.location : null;
+const handleCreateStream = catchAsync(async (req, res) => {
+  const { name, description } = req.body;
+  const image = req.file ? req.file.location : null;
 
-        const existing = await pool.query("SELECT * FROM streams WHERE name = $1", [name]);
-        if (existing.rows.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: "Stream name already exists. Please choose a different name.",
-            });
-        }
+  if (!name) {
+    throw new ApiError(400, "Stream name is required");
+  }
 
-        const result = await pool.query(
-            `INSERT INTO streams (name, description, image)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-            [name, description, image]
-        );
+  const existing = await pool.query(
+    "SELECT * FROM streams WHERE name = $1",
+    [name]
+  );
+  
+  if (existing.rows.length > 0) {
+    throw new ApiError(400, "Stream name already exists. Please choose a different name.");
+  }
 
-        res.status(201).json({
-            success: true,
-            message: "Stream created successfully",
-            data: result.rows[0],
-        });
+  const result = await pool.query(
+    `INSERT INTO streams (name, description, image)
+     VALUES ($1, $2, $3)
+     RETURNING *`,
+    [name, description, image]
+  );
 
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to create stream",
-            error: error.message,
-        });
+  sendResponse(res, {
+    statusCode: 201,
+    message: "Stream created successfully",
+    data: result.rows[0],
+  });
+});
+
+const handleGetStream = catchAsync(async (req, res) => {
+  const result = await pool.query(
+    "SELECT * FROM streams ORDER BY created_at DESC"
+  );
+
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Streams fetched successfully",
+    total: result.rows.length,
+    data: result.rows,
+  });
+});
+
+const handleUpdateStream = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { name, description } = req.body;
+  const image = req.file ? req.file.location : null;
+
+  const existingStream = await pool.query(
+    "SELECT * FROM streams WHERE id = $1",
+    [id]
+  );
+
+  if (existingStream.rows.length === 0) {
+    throw new ApiError(404, "Stream not found");
+  }
+
+  if (name) {
+    const duplicateCheck = await pool.query(
+      "SELECT * FROM streams WHERE name = $1 AND id != $2",
+      [name, id]
+    );
+    
+    if (duplicateCheck.rows.length > 0) {
+      throw new ApiError(400, "Another stream with this name already exists.");
     }
-};
+  }
 
-const handleGetStream = async (req, res) => {
-    try {
-        const result = await pool.query("SELECT * FROM streams ORDER BY created_at DESC");
-        res.status(200).json({
-            success: true,
-            total: result.rows.length,
-            message: "Streams fetched successfully",
-            data: result.rows,
-        });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch streams",
-            error: error.message,
-        });
-    }
-};
+  const result = await pool.query(
+    `UPDATE streams
+     SET name = COALESCE($1, name),
+         description = COALESCE($2, description),
+         image = COALESCE($3, image),
+         updated_at = NOW()
+     WHERE id = $4
+     RETURNING *`,
+    [name, description, image, id]
+  );
 
-const handleUpdateStream = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { name, description } = req.body;
-        const image = req.file ? req.file.location : null;
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Stream updated successfully",
+    data: result.rows[0],
+  });
+});
 
-        const existing = await pool.query(
-            "SELECT * FROM streams WHERE name = $1 AND id != $2",
-            [name, id]
-        );
-        if (existing.rows.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: "Another stream with this name already exists.",
-            });
-        }
+const handleDeleteStream = catchAsync(async (req, res) => {
+  const { id } = req.params;
 
-        const result = await pool.query(
-            `UPDATE streams
-       SET name = $1,
-           description = $2,
-           image = $3,
-           updated_at = NOW()
-       WHERE id = $4
-       RETURNING *`,
-            [name, description, image, id]
-        );
+  const existingStream = await pool.query(
+    "SELECT * FROM streams WHERE id = $1",
+    [id]
+  );
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, message: "Stream not found" });
-        }
+  if (existingStream.rows.length === 0) {
+    throw new ApiError(404, "Stream not found");
+  }
 
-        res.status(200).json({
-            success: true,
-            message: "Stream updated successfully",
-            data: result.rows[0],
-        });
+  const result = await pool.query(
+    `DELETE FROM streams
+     WHERE id = $1
+     RETURNING *`,
+    [id]
+  );
 
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to update stream",
-            error: error.message,
-        });
-    }
-};
-
-const handleDeleteStream = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        const result = await pool.query(
-            `DELETE FROM streams
-       WHERE id = $1
-       RETURNING *`,
-            [id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, message: "Stream not found" });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: "Stream deleted successfully",
-            data: result.rows[0],
-        });
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to delete stream",
-            error: error.message,
-        });
-    }
-};
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Stream deleted successfully",
+    data: result.rows[0],
+  });
+});
 
 module.exports = {
-    handleCreateStream,
-    handleGetStream,
-    handleUpdateStream,
-    handleDeleteStream,
+  handleCreateStream,
+  handleGetStream,
+  handleUpdateStream,
+  handleDeleteStream,
 };

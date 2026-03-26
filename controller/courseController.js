@@ -1,4 +1,7 @@
 const { pool } = require("../db/conntctDB");
+const ApiError = require("../utils/apiError");
+const catchAsync = require("../utils/catchAsync");
+const sendResponse = require("../utils/response");
 
 const normalizeParentId = (parentId) => {
   if (
@@ -110,15 +113,14 @@ RETURNING *`,
   }
 };
 
-const handleGetCourse = async (req, res) => {
+const handleGetCourse = catchAsync(async (req, res) => {
   try {
     const { type } = req.params;
 
     if (!type) {
-      return res.status(400).json({
-        success: false,
-        message: "Course type is required"
-      });
+      throw new ApiError(400, "Course type is required");
+
+
     }
 
     const result = await pool.query(
@@ -138,16 +140,20 @@ const handleGetCourse = async (req, res) => {
 
     const data = result.rows.map(({ account_id, revenue_share, ...res }) => res);
 
-    res.status(200).json({
-      success: true,
+    sendResponse(res, {
+      statusCode: 201,
+      message: "Course get successfully",
       total: result.rows.length,
-      data
+      data,
     });
+
+ 
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: "Server Error" });
   }
-};
+});
 
 const handleUpdatePublish = async (req, res) => {
   try {

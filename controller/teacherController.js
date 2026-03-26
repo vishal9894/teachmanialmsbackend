@@ -1,119 +1,172 @@
 const { pool } = require("../db/conntctDB");
+const catchAsync = require("../utils/catchAsync");
+const ApiError = require("../utils/apiError");
+const sendResponse = require("../utils/response");
 
+const handleCreateTeacher = catchAsync(async (req, res) => {
+  const {
+    name,
+    account_id,
+    revenue_share,
+    assigned_course_id,
+    teacherdetails,
+    rating,
+  } = req.body;
 
-const handleCreateTeacher = async (req, res) => {
-  try {
-    const {
+  if (!name) {
+    throw new ApiError(400, "Teacher name is required");
+  }
+
+  const image = req.file?.location || req.file?.path || null;
+
+  const result = await pool.query(
+    `INSERT INTO teachers
+    (name, account_id, revenue_share, assigned_course_id, rating, teacherdetails, image)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING *`,
+    [
+      name,
+      account_id,
+      revenue_share,
+      assigned_course_id,
+      rating,
+      teacherdetails,
+      image,
+    ]
+  );
+
+  const data = result.rows.map(({ account_id, revenue_share, ...res }) => res);
+
+  sendResponse(res, {
+    statusCode: 201,
+    message: "Teacher created successfully",
+    data: data[0],
+  });
+});
+
+const handleGetTeacher = catchAsync(async (req, res) => {
+  const result = await pool.query(
+    "SELECT * FROM teachers ORDER BY created_at DESC"
+  );
+
+  const data = result.rows.map(({ account_id, revenue_share, ...res }) => res);
+
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Get teachers successfully",
+    total: data.length,
+    data,
+  });
+});
+
+const handleGetTeacherById = catchAsync(async (req, res) => {
+  const { id } = req.params;
+
+  const result = await pool.query(
+    `SELECT id, name, account_id, revenue_share, assigned_course_id, rating, teacherdetails, image, created_at
+     FROM teachers
+     WHERE id = $1`,
+    [id]
+  );
+
+  if (result.rows.length === 0) {
+    throw new ApiError(404, "Teacher not found");
+  }
+
+  const { account_id, revenue_share, ...teacherData } = result.rows[0];
+
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Teacher fetched successfully",
+    data: teacherData,
+  });
+});
+
+const handleUpdateTeacher = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const {
+    name,
+    account_id,
+    revenue_share,
+    assigned_course_id,
+    teacherdetails,
+    rating,
+  } = req.body;
+
+  const existingTeacher = await pool.query(
+    "SELECT * FROM teachers WHERE id = $1",
+    [id]
+  );
+
+  if (existingTeacher.rows.length === 0) {
+    throw new ApiError(404, "Teacher not found");
+  }
+
+  const image = req.file?.location || req.file?.path || null;
+
+  const result = await pool.query(
+    `UPDATE teachers
+     SET name = COALESCE($1, name),
+         account_id = COALESCE($2, account_id),
+         revenue_share = COALESCE($3, revenue_share),
+         assigned_course_id = COALESCE($4, assigned_course_id),
+         teacherdetails = COALESCE($5, teacherdetails),
+         rating = COALESCE($6, rating),
+         image = COALESCE($7, image),
+         updated_at = NOW()
+     WHERE id = $8
+     RETURNING *`,
+    [
       name,
       account_id,
       revenue_share,
       assigned_course_id,
       teacherdetails,
       rating,
-    } = req.body;
+      image,
+      id
+    ]
+  );
 
-    
-    const image = req.file?.location || req.file?.path || null;
+  const { account_id: accId, revenue_share: revShare, ...teacherData } = result.rows[0];
 
-    console.log("Uploaded Image:", image);
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Teacher updated successfully",
+    data: teacherData,
+  });
+});
 
-    const result = await pool.query(
-      `INSERT INTO teachers
-      (name, account_id, revenue_share, assigned_course_id, rating, teacherdetails, image)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *`,
-      [
-        name,
-        account_id,
-        revenue_share,
-        assigned_course_id,
-        rating,
-        teacherdetails,
-        image,
-      ]
-    );
+const handleDeleteTeacher = catchAsync(async (req, res) => {
+  const { id } = req.params;
 
-    const data = result.rows.map(({ account_id, revenue_share, ...res }) => res);
+  const existingTeacher = await pool.query(
+    "SELECT * FROM teachers WHERE id = $1",
+    [id]
+  );
 
-    res.status(201).json({
-      success: true,
-      message: "Teacher created successfully",
-      data,
-    });
-  } catch (error) {
-    console.error("Create Teacher Error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Server Error",
-    });
+  if (existingTeacher.rows.length === 0) {
+    throw new ApiError(404, "Teacher not found");
   }
+
+  const result = await pool.query(
+    "DELETE FROM teachers WHERE id = $1 RETURNING *",
+    [id]
+  );
+
+  const { account_id, revenue_share, ...teacherData } = result.rows[0];
+
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Teacher deleted successfully",
+    data: teacherData,
+  });
+});
+
+module.exports = { 
+  handleCreateTeacher, 
+  handleGetTeacher, 
+  handleGetTeacherById,
+  handleUpdateTeacher,
+  handleDeleteTeacher 
 };
-const handleGetTeacher = async (req, res) => {
-    try {
-        const result = await pool.query(
-            "SELECT * FROM teachers"
-        )
-        const data = result.rows.map((res) => res)
-
-
-        res.status(200).json({ success: true, message: "Get Teacher sucessfully", data })
-
-    } catch (error) {
-        console.log(error);
-
-    }
-}
-
-const handleGetTeacherById = async (req, res) => {
-    try {
-
-        const { id } = req.params;
-
-        const result = await pool.query(
-            `SELECT id, name, account_id, revenue_share
-       FROM teachers
-       WHERE id = $1`,
-            [id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Teacher not found"
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            data: result.rows[0]
-        });
-
-    } catch (error) {
-        console.error(error);
-
-        res.status(500).json({
-            success: false,
-            message: "Server error"
-        });
-    }
-};
-
-const handleDeleteTeacher = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const result = await pool.query("DELETE FROM teachers WHERE id = $1 RETURNING *", [id]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: "Teacher not found" });
-    }
-
-    res.status(200).json({ success: true, message: "Teacher deleted successfully", data: result.rows[0] });
-  } catch (error) {
-    console.error("Delete Teacher Error:", error);
-    res.status(500).json({ success: false, message: "Server Error" });
-  }
-};
-
-module.exports = { handleCreateTeacher, handleGetTeacher, handleGetTeacherById , handleDeleteTeacher };

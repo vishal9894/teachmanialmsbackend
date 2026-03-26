@@ -1,169 +1,111 @@
 const { pool } = require("../db/conntctDB");
+const catchAsync = require("../utils/catchAsync");
+const ApiError = require("../utils/apiError");
+const sendResponse = require("../utils/response");
 
-const handleCreateSocialmedia = async (req, res) => {
-  try {
-    const { name, url } = req.body;
+const handleCreateSocialmedia = catchAsync(async (req, res) => {
+  const { name, url } = req.body;
 
-    if (!name || !url) {
-      return res.status(400).json({
-        success: false,
-        message: "Name and URL are required",
-      });
-    }
-
-    
-    let image = null;
-
-   
-    if (req.file) {
-      image = req.file.location || req.file.path;
-    }
-
-   
-    if (req.files?.image?.[0]) {
-      image =
-        req.files.image[0].location ||
-        req.files.image[0].path;
-    }
-
-    console.log("Uploaded Image:", image);
-
-    const result = await pool.query(
-      `INSERT INTO social_media (name, url, image)
-       VALUES ($1,$2,$3)
-       RETURNING *`,
-      [name, url, image]
-    );
-
-    res.status(201).json({
-      success: true,
-      message: "Social media created successfully",
-      data: result.rows[0],
-    });
-  } catch (error) {
-    console.error("Create Social Media Error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Server Error",
-    });
+  if (!name || !url) {
+    throw new ApiError(400, "Name and URL are required");
   }
-};
 
-const handleGetSocialmedia = async (req, res) => {
-    try {
+  let image = null;
 
-        const result = await pool.query(
-            "SELECT * FROM  social_media"
-        )
+  if (req.file) {
+    image = req.file.location || req.file.path;
+  }
 
-        const data = result.rows.map((res) => res);
+  if (req.files?.image?.[0]) {
+    image = req.files.image[0].location || req.files.image[0].path;
+  }
 
-        const total = data.length;
+  const result = await pool.query(
+    `INSERT INTO social_media (name, url, image)
+     VALUES ($1,$2,$3)
+     RETURNING *`,
+    [name, url, image]
+  );
 
-        res.status(200).json({ success: true, message: " fetch socialmedia", total , data })
+  sendResponse(res, {
+    statusCode: 201,
+    message: "Social media created successfully",
+    data: result.rows[0],
+  });
+});
 
-    } catch (error) {
+const handleGetSocialmedia = catchAsync(async (req, res) => {
+  const result = await pool.query(
+    "SELECT * FROM social_media ORDER BY created_at DESC"
+  );
 
-        console.log(error);
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Fetch social media successfully",
+    total: result.rows.length,
+    data: result.rows
+  });
+});
 
+const handleUpdateSocialmedia = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { name, url } = req.body;
 
-    }
-}
+  const image = req.files?.image?.[0]?.location || null;
 
+  const check = await pool.query(
+    `SELECT * FROM social_media WHERE id = $1`,
+    [id]
+  );
 
-const handleUpdateSocialmedia = async (req, res) => {
-    try {
+  if (check.rows.length === 0) {
+    throw new ApiError(404, "Social media not found");
+  }
 
-        const { id } = req.params;
-        const { name, url } = req.body;
+  const result = await pool.query(
+    `UPDATE social_media
+     SET name = COALESCE($1, name),
+         url = COALESCE($2, url),
+         image = COALESCE($3, image),
+         updated_at = NOW()
+     WHERE id = $4
+     RETURNING *`,
+    [name, url, image, id]
+  );
 
-        const image = req.files?.image?.[0]?.location || null;
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Social media updated successfully",
+    data: result.rows[0]
+  });
+});
 
-        const check = await pool.query(
-            `SELECT * FROM social_media WHERE id = $1`,
-            [id]
-        );
+const handleDeleteSocialmedia = catchAsync(async (req, res) => {
+  const { id } = req.params;
 
-        if (check.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Social media not found"
-            });
-        }
+  const check = await pool.query(
+    `SELECT * FROM social_media WHERE id = $1`,
+    [id]
+  );
 
-        const result = await pool.query(
-            `UPDATE social_media
-       SET name = $1,
-           url = $2,
-           image = COALESCE($3, image)
-       WHERE id = $4
-       RETURNING *`,
-            [name, url, image, id]
-        );
+  if (check.rows.length === 0) {
+    throw new ApiError(404, "Social media not found");
+  }
 
-        res.status(200).json({
-            success: true,
-            message: "Social media updated successfully",
-            data: result.rows[0]
-        });
+  await pool.query(
+    `DELETE FROM social_media WHERE id = $1`,
+    [id]
+  );
 
-    } catch (error) {
-
-        console.error(error);
-
-        res.status(500).json({
-            success: false,
-            message: "Server Error"
-        });
-
-    }
-};
-
-
-const handleDeleteSocialmedia = async (req, res) => {
-    try {
-
-        const { id } = req.params;
-
-        const check = await pool.query(
-            `SELECT * FROM social_media WHERE id = $1`,
-            [id]
-        );
-
-        if (check.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Social media not found"
-            });
-        }
-
-        await pool.query(
-            `DELETE FROM social_media WHERE id = $1`,
-            [id]
-        );
-
-        res.status(200).json({
-            success: true,
-            message: "Social media deleted successfully"
-        });
-
-    } catch (error) {
-
-        console.error(error);
-
-        res.status(500).json({
-            success: false,
-            message: "Server Error"
-        });
-
-    }
-};
-
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Social media deleted successfully"
+  });
+});
 
 module.exports = {
-    handleCreateSocialmedia,
-    handleUpdateSocialmedia,
-    handleDeleteSocialmedia,
-    handleGetSocialmedia
+  handleCreateSocialmedia,
+  handleUpdateSocialmedia,
+  handleDeleteSocialmedia,
+  handleGetSocialmedia
 };

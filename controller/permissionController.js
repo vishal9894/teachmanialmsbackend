@@ -1,135 +1,106 @@
 const { pool } = require("../db/conntctDB");
+const catchAsync = require("../utils/catchAsync");
+const ApiError = require("../utils/apiError");
+const sendResponse = require("../utils/response");
 
+const handleGetAllPermissions = catchAsync(async (req, res) => {
+  const result = await pool.query(`
+    SELECT * FROM permissions 
+    ORDER BY group_name, id
+  `);
 
-const handleGetAllPermissions = async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT * FROM permissions 
-            ORDER BY group_name, id
-        `);
-
-        
-        const groupedPermissions = {};
-        result.rows.forEach(perm => {
-            if (!groupedPermissions[perm.group_name]) {
-                groupedPermissions[perm.group_name] = [];
-            }
-            groupedPermissions[perm.group_name].push({
-                id: perm.id,
-                name: perm.name,
-                description: perm.description
-            });
-        });
-
-        res.status(200).json({
-            success: true,
-            data: groupedPermissions
-        });
-    } catch (error) {
-        console.error("Error getting permissions:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to get permissions"
-        });
+  const groupedPermissions = {};
+  result.rows.forEach(perm => {
+    if (!groupedPermissions[perm.group_name]) {
+      groupedPermissions[perm.group_name] = [];
     }
-};
+    groupedPermissions[perm.group_name].push({
+      id: perm.id,
+      name: perm.name,
+      description: perm.description
+    });
+  });
 
-const handleGetAllPermissionsFlat = async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT * FROM permissions 
-            ORDER BY group_name, id
-        `);
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Permissions fetched successfully",
+    total: result.rows.length,
+    data: groupedPermissions
+  });
+});
 
-        res.status(200).json({
-            success: true,
-            data: result.rows
-        });
-    } catch (error) {
-        console.error("Error getting permissions:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to get permissions"
-        });
+const handleGetAllPermissionsFlat = catchAsync(async (req, res) => {
+  const result = await pool.query(`
+    SELECT * FROM permissions 
+    ORDER BY group_name, id
+  `);
+
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Permissions fetched successfully",
+    total: result.rows.length,
+    data: result.rows
+  });
+});
+
+const handleGetUserPermissions = catchAsync(async (req, res) => {
+  const adminId = req.admin.id;
+
+  const result = await pool.query(`
+    SELECT p.* FROM permissions p
+    INNER JOIN role_permissions rp ON p.id = rp.permission_id
+    INNER JOIN admin a ON a.role_id = rp.role_id
+    WHERE a.id = $1
+    ORDER BY p.group_name, p.id
+  `, [adminId]);
+
+  const groupedPermissions = {};
+  result.rows.forEach(perm => {
+    if (!groupedPermissions[perm.group_name]) {
+      groupedPermissions[perm.group_name] = [];
     }
-};
+    groupedPermissions[perm.group_name].push({
+      id: perm.id,
+      name: perm.name,
+      description: perm.description
+    });
+  });
 
+  sendResponse(res, {
+    statusCode: 200,
+    message: "User permissions fetched successfully",
+    total: result.rows.length,
+    data: groupedPermissions
+  });
+});
 
-const handleGetUserPermissions = async (req, res) => {
-    try {
-        const adminId = req.admin.id;
+const handleCheckPermission = catchAsync(async (req, res) => {
+  const adminId = req.admin.id;
+  const { permission } = req.query;
 
-        const result = await pool.query(`
-            SELECT p.* FROM permissions p
-            INNER JOIN role_permissions rp ON p.id = rp.permission_id
-            INNER JOIN admin a ON a.role_id = rp.role_id
-            WHERE a.id = $1
-            ORDER BY p.group_name, p.id
-        `, [adminId]);
+  if (!permission) {
+    throw new ApiError(400, "Permission name is required");
+  }
 
-       
-        const groupedPermissions = {};
-        result.rows.forEach(perm => {
-            if (!groupedPermissions[perm.group_name]) {
-                groupedPermissions[perm.group_name] = [];
-            }
-            groupedPermissions[perm.group_name].push({
-                id: perm.id,
-                name: perm.name,
-                description: perm.description
-            });
-        });
+  const result = await pool.query(`
+    SELECT COUNT(*) FROM admin a
+    INNER JOIN role_permissions rp ON a.role_id = rp.role_id
+    INNER JOIN permissions p ON rp.permission_id = p.id
+    WHERE a.id = $1 AND p.name = $2
+  `, [adminId, permission]);
 
-        res.status(200).json({
-            success: true,
-            data: groupedPermissions
-        });
-    } catch (error) {
-        console.error("Error getting user permissions:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to get user permissions"
-        });
-    }
-};
+  const hasPermission = parseInt(result.rows[0].count) > 0;
 
-const handleCheckPermission = async (req, res) => {
-    try {
-        const adminId = req.admin.id;
-        const { permission } = req.query;
-
-        if (!permission) {
-            return res.status(400).json({
-                success: false,
-                message: "Permission name is required"
-            });
-        }
-
-        const result = await pool.query(`
-            SELECT COUNT(*) FROM admin a
-            INNER JOIN role_permissions rp ON a.role_id = rp.role_id
-            INNER JOIN permissions p ON rp.permission_id = p.id
-            WHERE a.id = $1 AND p.name = $2
-        `, [adminId, permission]);
-
-        const hasPermission = parseInt(result.rows[0].count) > 0;
-
-        res.status(200).json({
-            success: true,
-            data: { hasPermission }
-        });
-    } catch (error) {
-        console.error("Error checking permission:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to check permission"
-        });
-    }
-};
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Permission checked successfully",
+    data: { hasPermission }
+  });
+});
 
 module.exports = {
-    handleGetAllPermissions,
-    handleGetAllPermissionsFlat,
-    handleGetUserPermissions,
-    handleCheckPermission
+  handleGetAllPermissions,
+  handleGetAllPermissionsFlat,
+  handleGetUserPermissions,
+  handleCheckPermission
 };

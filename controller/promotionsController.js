@@ -1,291 +1,234 @@
 const { pool } = require("../db/conntctDB");
+const catchAsync = require("../utils/catchAsync");
+const ApiError = require("../utils/apiError");
+const sendResponse = require("../utils/response");
 
-const handleAddTopTeacher = async (req, res) => {
-  try {
-    const { name, about, streamid } = req.body;
+const handleAddTopTeacher = catchAsync(async (req, res) => {
+  const { name, about, streamid } = req.body;
 
-
-    
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "Avatar image is required",
-      });
-    }
-
-   
-    const avatar = req.file.location;
-
-
-
-    const result = await pool.query(
-      `INSERT INTO top_teachers (name, about, stream_id, avatar)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
-      [name, about, streamid, avatar]
-    );
-
-    res.status(201).json({
-      success: true,
-      message: "Teacher created successfully",
-      data: result.rows[0],
-    });
-
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+  if (!name || !about) {
+    throw new ApiError(400, "Name and about are required");
   }
-};
 
-const handleGetTopTeacher = async (req, res) => {
-  try {
-    const tecacher = await pool.query(
-      "SELECT * FROM top_teachers"
-    )
-    const data = tecacher.rows.map((res) => res)
-    res.status(200).json({ message: "fetch Teacher sucessfully", data })
-
-  } catch (error) {
-
+  if (!req.file) {
+    throw new ApiError(400, "Avatar image is required");
   }
-}
 
-const handleUpdateTopTeacher = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, about, streamid } = req.body;
+  const avatar = req.file.location;
 
+  const result = await pool.query(
+    `INSERT INTO top_teachers (name, about, stream_id, avatar)
+     VALUES ($1, $2, $3, $4)
+     RETURNING *`,
+    [name, about, streamid, avatar]
+  );
 
-    const existing = await pool.query(
-      "SELECT * FROM top_teachers WHERE id = $1",
-      [id]
-    );
+  sendResponse(res, {
+    statusCode: 201,
+    message: "Teacher created successfully",
+    data: result.rows[0],
+  });
+});
 
-    if (existing.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Teacher not found",
-      });
-    }
+const handleGetTopTeacher = catchAsync(async (req, res) => {
+  const result = await pool.query(
+    "SELECT * FROM top_teachers ORDER BY created_at DESC"
+  );
 
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Fetch teachers successfully",
+    total: result.rows.length,
+    data: result.rows
+  });
+});
 
-    let avatar = existing.rows[0].image;
+const handleUpdateTopTeacher = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { name, about, streamid } = req.body;
 
-    if (req.file) {
-      avatar = req.file.location;
-    }
+  const existing = await pool.query(
+    "SELECT * FROM top_teachers WHERE id = $1",
+    [id]
+  );
 
-    const result = await pool.query(
-      `UPDATE top_teachers
-       SET name = $1,
-           about = $2,
-           stream_id = $3,
-           avatar = $4
-       WHERE id = $5
-       RETURNING *`,
-      [name, about, streamid, avatar, id]
-    );
-
-    res.status(200).json({
-      success: true,
-      message: "Teacher updated successfully",
-      data: result.rows[0],
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+  if (existing.rows.length === 0) {
+    throw new ApiError(404, "Teacher not found");
   }
-};
 
-const handleDeleteTopTeacher = async (req, res) => {
-  try {
-    const { id } = req.params;
+  let avatar = existing.rows[0].avatar;
 
-    const existing = await pool.query(
-      "SELECT * FROM top_teachers WHERE id = $1",
-      [id]
-    );
-
-    if (existing.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Teacher not found",
-      });
-    }
-
-    await pool.query(
-      "DELETE FROM top_teachers WHERE id = $1",
-      [id]
-    );
-
-    res.status(200).json({
-      success: true,
-      message: "Teacher deleted successfully",
-    });
-
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+  if (req.file) {
+    avatar = req.file.location;
   }
-};
 
-const handleAddTopStudent = async (req, res) => {
-  try {
+  const result = await pool.query(
+    `UPDATE top_teachers
+     SET name = $1,
+         about = $2,
+         stream_id = $3,
+         avatar = $4,
+         updated_at = NOW()
+     WHERE id = $5
+     RETURNING *`,
+    [name || existing.rows[0].name, about || existing.rows[0].about, streamid || existing.rows[0].stream_id, avatar, id]
+  );
 
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Teacher updated successfully",
+    data: result.rows[0],
+  });
+});
 
-    const { name, streamid , video } = req.body;
+const handleDeleteTopTeacher = catchAsync(async (req, res) => {
+  const { id } = req.params;
 
-    if (!name || !streamid || !video) {
-      return res.status(400).json({
-        success: false,
-        message: "Name and Stream ID are required",
-      });
-    }
+  const existing = await pool.query(
+    "SELECT * FROM top_teachers WHERE id = $1",
+    [id]
+  );
 
-    const streamIdInt = streamid;
-   
-    if (!req.files || !req.files.avatar ) {
-      return res.status(400).json({
-        success: false,
-        message: "Avatar and Video are required",
-      });
-    }
+  if (existing.rows.length === 0) {
+    throw new ApiError(404, "Teacher not found");
+  }
 
-    const avatar = req.files.avatar[0].location;
-    
+  await pool.query(
+    "DELETE FROM top_teachers WHERE id = $1",
+    [id]
+  );
 
-    if (!avatar ) {
-      return res.status(400).json({
-        success: false,
-        message: "File upload failed",
-      });
-    }
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Teacher deleted successfully",
+  });
+});
 
+const handleAddTopStudent = catchAsync(async (req, res) => {
+  const { name, streamid, video } = req.body;
+
+  if (!name || !streamid || !video) {
+    throw new ApiError(400, "Name, stream ID, and video are required");
+  }
+
+  const streamIdInt = parseInt(streamid);
+  if (isNaN(streamIdInt)) {
+    throw new ApiError(400, "Stream ID must be a valid number");
+  }
+
+  if (!req.files || !req.files.avatar) {
+    throw new ApiError(400, "Avatar image is required");
+  }
+
+  const avatar = req.files.avatar[0].location;
+
+  if (!avatar) {
+    throw new ApiError(400, "File upload failed");
+  }
+
+  const result = await pool.query(
+    `INSERT INTO top_students (name, stream_id, avatar, video)
+     VALUES ($1, $2, $3, $4)
+     RETURNING *`,
+    [name, streamIdInt, avatar, video]
+  );
+
+  sendResponse(res, {
+    statusCode: 201,
+    message: "Student created successfully",
+    data: result.rows[0],
+  });
+});
+
+const handleGetTopStudent = catchAsync(async (req, res) => {
+  const result = await pool.query(
+    "SELECT * FROM top_students ORDER BY created_at DESC"
+  );
+
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Fetch top students successfully",
+    total: result.rows.length,
+    data: result.rows
+  });
+});
+
+const handleUpdateTopStudent = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { name, streamid } = req.body;
+
+  const existing = await pool.query(
+    "SELECT * FROM top_students WHERE id = $1",
+    [id]
+  );
+
+  if (existing.rows.length === 0) {
+    throw new ApiError(404, "Student does not exist");
+  }
+
+  const student = existing.rows[0];
+  const updatedName = name || student.name;
   
-    const result = await pool.query(
-      `INSERT INTO top_students (name, stream_id, avatar, video)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
-      [name, streamIdInt, avatar, video]
-    );
-
-    return res.status(201).json({
-      success: true,
-      message: "Student created successfully",
-      data: result.rows[0],
-    });
-
-  } catch (error) {
-    console.error("AddTopStudent Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-
-const handleGetTopStudent = async (req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT * FROM top_students",
-    )
-
-    const data = result.rows.map((res) => res)
-
-    res.status(200).json({ message: "fetch top student sucessfully", data })
-
-  } catch (error) {
-
-  }
-}
-
-const handleUpdateTopStudent = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, streamid } = req.body;
-
-    const isExist = await pool.query(
-      "SELECT * FROM top_students WHERE id = $1",
-      [id]
-    );
-    if (isExist.rows.length === 0) {
-      return res.status(404).json({ message: "Student does not exist" });
+  let updatedStreamId = student.stream_id;
+  if (streamid !== undefined) {
+    updatedStreamId = parseInt(streamid);
+    if (isNaN(updatedStreamId)) {
+      throw new ApiError(400, "Stream ID must be a number");
     }
-    const student = isExist.rows[0];
-    const updatedName = name || student.name;
-    const updatedStreamId = streamid ? Number(streamid) : student.stream_id;
-    if (streamid && isNaN(updatedStreamId)) {
-      return res.status(400).json({ message: "Stream ID must be a number" });
-    }
-    const updatedAvatar = req.files?.avatar?.[0]?.location || student.avatar;
-    const updatedVideo = req.files?.video?.[0]?.location || student.video;
-    const result = await pool.query(
-      `UPDATE top_students
-       SET name = $1,
-           stream_id = $2,
-           avatar = $3,
-           video = $4,
-           created_at = NOW()
-       WHERE id = $5
-       RETURNING *`,
-      [updatedName, updatedStreamId, updatedAvatar, updatedVideo, id]
-    );
-    res.status(200).json({
-      success: true,
-      message: "Student updated successfully",
-      data: result.rows[0],
-    });
-
-  } catch (error) {
-    console.error("UpdateTopStudent Error:", error);
-    res.status(500).json({ success: false, message: error.message });
   }
-};
 
-const handleDeleteStudent = async (req, res) => {
-  try {
-    const { id } = req.params;
+  const updatedAvatar = req.files?.avatar?.[0]?.location || student.avatar;
+  const updatedVideo = req.files?.video?.[0]?.location || student.video;
 
-    const existing = await pool.query(
-      "SELECT * FROM top_students WHERE id = $1",
-      [id]
-    );
+  const result = await pool.query(
+    `UPDATE top_students
+     SET name = $1,
+         stream_id = $2,
+         avatar = $3,
+         video = $4,
+         updated_at = NOW()
+     WHERE id = $5
+     RETURNING *`,
+    [updatedName, updatedStreamId, updatedAvatar, updatedVideo, id]
+  );
 
-    if (existing.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Student not found",
-      });
-    }
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Student updated successfully",
+    data: result.rows[0],
+  });
+});
 
-    await pool.query(
-      "DELETE FROM top_students WHERE id = $1",
-      [id]
-    );
+const handleDeleteStudent = catchAsync(async (req, res) => {
+  const { id } = req.params;
 
-    res.status(200).json({
-      success: true,
-      message: "Student deleted successfully",
-    });
+  const existing = await pool.query(
+    "SELECT * FROM top_students WHERE id = $1",
+    [id]
+  );
 
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+  if (existing.rows.length === 0) {
+    throw new ApiError(404, "Student not found");
   }
-};
 
-module.exports = { handleAddTopTeacher, handleGetTopTeacher, handleUpdateTopTeacher, handleDeleteTopTeacher, handleAddTopStudent, handleGetTopStudent, handleUpdateTopStudent , handleDeleteStudent };
+  await pool.query(
+    "DELETE FROM top_students WHERE id = $1",
+    [id]
+  );
+
+  sendResponse(res, {
+    statusCode: 200,
+    message: "Student deleted successfully",
+  });
+});
+
+module.exports = { 
+  handleAddTopTeacher, 
+  handleGetTopTeacher, 
+  handleUpdateTopTeacher, 
+  handleDeleteTopTeacher, 
+  handleAddTopStudent, 
+  handleGetTopStudent, 
+  handleUpdateTopStudent, 
+  handleDeleteStudent 
+};

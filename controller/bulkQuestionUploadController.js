@@ -1,6 +1,9 @@
 const axios = require("axios");
 const mammoth = require("mammoth");
 const { pool } = require("../db/conntctDB");
+const catchAsync = require("../utils/catchAsync");
+const ApiError = require("../utils/apiError");
+const sendResponse = require("../utils/response");
 
 const toChemicalFormat = (text = "") => {
   const sub = {
@@ -131,116 +134,110 @@ const parseMCQ = (text) => {
   return questions;
 };
 
-const handleUploadMCQWord = async (req, res) => {
-  try {
-    if (!req.file?.location) {
-      return res.status(400).json({
-        success: false,
-        message: "File not uploaded",
-      });
-    }
+const handleUploadMCQWord = catchAsync(async (req, res) => {
+  if (!req.file?.location) {
+    throw new ApiError(400, "File not uploaded");
+  }
 
-    const buffer = await axios
-      .get(req.file.location, { responseType: "arraybuffer" })
-      .then(r => r.data);
+  const buffer = await axios
+    .get(req.file.location, { responseType: "arraybuffer" })
+    .then(r => r.data);
 
-    const { value: text } = await mammoth.extractRawText({ buffer });
+  const { value: text } = await mammoth.extractRawText({ buffer });
 
-    console.log("Extracted text sample:", text.substring(0, 500));
+  console.log("Extracted text sample:", text.substring(0, 500));
 
-    const questions = parseMCQ(text);
+  const questions = parseMCQ(text);
 
-    if (questions.length === 0) {
-      return res.json({
-        success: true,
+  if (questions.length === 0) {
+    return sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: "File uploaded but no MCQ questions could be detected. Please check the file format.",
+      data: {
         inserted: 0,
-        message: "File uploaded but no MCQ questions could be detected. Please check the file format.",
         sample: text.substring(0, 200)
-      });
-    }
-
-    const values = [];
-    const placeholders = [];
-
-    questions.forEach((q, i) => {
-      const idx = i * 6;
-
-      placeholders.push(
-        `($${idx + 1},$${idx + 2},$${idx + 3},$${idx + 4},$${idx + 5},$${idx + 6})`
-      );
-
-      values.push(
-        q.question || "No question",
-        q.option_a || "",
-        q.option_b || "",
-        q.option_c || "",
-        q.option_d || "",
-        q.correct_answer || "A"
-      );
+      }
     });
+  }
 
-    await pool.query(`
-      INSERT INTO mcq_questions
-      (question, option_a, option_b, option_c, option_d, correct_answer)
-      VALUES ${placeholders.join(",")}
-    `, values);
+  const values = [];
+  const placeholders = [];
 
-    res.json({
-      success: true,
+  questions.forEach((q, i) => {
+    const idx = i * 6;
+
+    placeholders.push(
+      `($${idx + 1},$${idx + 2},$${idx + 3},$${idx + 4},$${idx + 5},$${idx + 6})`
+    );
+
+    values.push(
+      q.question || "No question",
+      q.option_a || "",
+      q.option_b || "",
+      q.option_c || "",
+      q.option_d || "",
+      q.correct_answer || "A"
+    );
+  });
+
+  await pool.query(`
+    INSERT INTO mcq_questions
+    (question, option_a, option_b, option_c, option_d, correct_answer)
+    VALUES ${placeholders.join(",")}
+  `, values);
+
+  sendResponse(res, {
+    statusCode: 200,
+    message: `${questions.length} questions imported successfully`,
+    data: {
       inserted: questions.length,
-      message: `${questions.length} questions imported successfully`,
-      sample: questions[0],
-    });
-
-  } catch (error) {
-    console.error("Upload error:", error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-const handleGetMCQ = async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT * FROM mcq_questions
-      ORDER BY created_at DESC
-    `);
-
-    res.json({
-      success: true,
-      total: result.rowCount,
-      questions: result.rows,
-    });
-  } catch (error) {
-    console.error("Get error:", error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-const handleDeleteMCQ = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    if (id === "all") {
-      await pool.query("DELETE FROM mcq_questions");
-    } else {
-      await pool.query("DELETE FROM mcq_questions WHERE id=$1", [id]);
+      sample: questions[0]
     }
+  });
+});
 
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Delete error:", error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+const handleGetMCQ = catchAsync(async (req, res) => {
+  const result = await pool.query(`
+    SELECT * FROM mcq_questions
+    ORDER BY created_at DESC
+  `);
+
+  sendResponse(res, {
+    statusCode: 200,
+    message: "MCQ questions fetched successfully",
+    total: result.rowCount,
+    data: result.rows
+  });
+});
+
+const handleDeleteMCQ = catchAsync(async (req, res) => {
+  const { id } = req.params;
+
+  if (id === "all") {
+    await pool.query("DELETE FROM mcq_questions");
+  } else {
+    const checkExists = await pool.query(
+      "SELECT id FROM mcq_questions WHERE id=$1",
+      [id]
+    );
+    
+    if (checkExists.rows.length === 0) {
+      throw new ApiError(404, "MCQ question not found");
+    }
+    
+    await pool.query("DELETE FROM mcq_questions WHERE id=$1", [id]);
   }
-};
+
+  sendResponse(res, {
+    statusCode: 200,
+    message: id === "all" ? "All MCQ questions deleted successfully" : "MCQ question deleted successfully",
+    data: {
+      deletedId: id !== "all" ? id : null,
+      deletedAll: id === "all"
+    }
+  });
+});
 
 module.exports = {
   handleUploadMCQWord,
